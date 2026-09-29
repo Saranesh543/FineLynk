@@ -1,5 +1,6 @@
 import { HazardType } from '../simulation/types';
 import { NodeStatus } from '../data/tokens';
+import { SensorRoleData } from '../data/nodes';
 
 export interface InteractiveNodeTarget {
   type: 'node';
@@ -11,14 +12,18 @@ export interface InteractiveNodeTarget {
   linksCount: number;
   connectedNodeNames: string[];
   isCommandCenter: boolean;
+  sensorRole?: SensorRoleData;
 }
 
 export interface InteractiveHazardTarget {
   type: 'hazard';
   id: HazardType;
   name: string;
+  zoneTitle?: string;
   targetNodeId: number;
   targetNodeName: string;
+  sensorNodeIds?: number[];
+  sensorDesignations?: Record<number, string>;
   color: string;
   description: string;
 }

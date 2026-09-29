@@ -1,11 +1,18 @@
 import { TOKENS } from './tokens';
 
+export type ZoneCoverageState = 'FULL' | 'REDUNDANT' | 'DEGRADED' | 'LOST';
+export type ZoneDetectionState = 'AVAILABLE' | 'UNAVAILABLE';
+
 export interface HazardZoneData {
   id: 'flood' | 'fire' | 'industrial';
   name: string;
+  zoneTitle: string;
   targetNodeId: number;
+  sensorNodeIds: number[];
+  sensorDesignations: Record<number, string>;
   center: [number, number]; // [x, z]
   radius: number;
+  coverageRadius: number;
   color: string;
   opacity: number;
 }
@@ -13,28 +20,52 @@ export interface HazardZoneData {
 export const HAZARD_ZONES: Record<'flood' | 'fire' | 'industrial', HazardZoneData> = {
   flood: {
     id: 'flood',
-    name: 'Flood — Node Flood-04',
+    name: 'Flood — Lowland River Corridor',
+    zoneTitle: 'FLOOD ZONE',
     targetNodeId: 1,
+    sensorNodeIds: [1, 7, 9],
+    sensorDesignations: {
+      1: 'Flood-04',
+      7: 'Flood-S1',
+      9: 'Flood-S2',
+    },
     center: [-22, 14],
-    radius: 11,
+    radius: 14.8,
+    coverageRadius: 14.8,
     color: TOKENS.colors.flood,
     opacity: 0.14,
   },
   fire: {
     id: 'fire',
-    name: 'Forest Fire — Node Forest-07',
+    name: 'Forest Fire — Woodland Ridge',
+    zoneTitle: 'FOREST FIRE ZONE',
     targetNodeId: 2,
+    sensorNodeIds: [2, 11, 13],
+    sensorDesignations: {
+      2: 'Forest-07',
+      11: 'Forest-S1',
+      13: 'Forest-S2',
+    },
     center: [20, -16],
-    radius: 11,
+    radius: 14.8,
+    coverageRadius: 14.8,
     color: TOKENS.colors.fire,
     opacity: 0.12,
   },
   industrial: {
     id: 'industrial',
-    name: 'Industrial Leak — Node Indus-02',
+    name: 'Industrial Leak — Chemical Outpost',
+    zoneTitle: 'INDUSTRIAL ZONE',
     targetNodeId: 3,
+    sensorNodeIds: [3, 15, 17],
+    sensorDesignations: {
+      3: 'Indus-02',
+      15: 'Indus-S1',
+      17: 'Indus-S2',
+    },
     center: [-14, -26],
-    radius: 10,
+    radius: 14.8,
+    coverageRadius: 14.8,
     color: TOKENS.colors.industrial,
     opacity: 0.12,
   },

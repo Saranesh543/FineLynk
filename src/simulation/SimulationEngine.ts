@@ -43,8 +43,20 @@ export class SimulationEngine {
   }
 
   /**
-   * Toggles node operational failure status for any of the 7 network nodes.
-   * Dynamically triggers self-healing BFS path re-evaluation and emits ROUTE_RECONFIGURED events.
+   * Helper to format path as human readable node names
+   */
+  private formatPathNames(path: number[]): string {
+    return path
+      .map((id) => {
+        const node = NETWORK_NODES.find((n) => n.id === id);
+        return node ? node.name : `Node-${id}`;
+      })
+      .join(' → ');
+  }
+
+  /**
+   * Toggles node operational failure status for any network node.
+   * Dynamically triggers self-healing BFS path re-evaluation, sensor failovers, and emits ROUTE_RECONFIGURED events.
    */
   public setNodeBlocked(nodeId: number, blocked: boolean): void {
     const node = NETWORK_NODES.find((n) => n.id === nodeId);
@@ -71,8 +83,63 @@ export class SimulationEngine {
       });
     }
 
-    // Dynamic Self-Healing BFS evaluation across all active simulations
+    // Dynamic Self-Healing BFS & Sensor Failover evaluation across all active simulations
     for (const [hazardType, sim] of this.activeSimulations.entries()) {
+      const spec = HAZARD_ZONES[hazardType];
+
+      // Check if the current reporting sensor node has failed
+      if (this.blockedNodeIds.has(sim.hazardNodeId)) {
+        // Attempt redundant sensor failover to another healthy sensor in this hazard zone
+        const failoverSensorId = this.telemetry.selectBestDetectionSource(hazardType, this.blockedNodeIds);
+
+        if (failoverSensorId !== null) {
+          const failoverPath = findShortestPath(failoverSensorId, 0, this.blockedNodeIds);
+
+          if (failoverPath && failoverPath.length >= 2) {
+            const failoverNodeName = NETWORK_NODES.find((n) => n.id === failoverSensorId)?.name || `Node-${failoverSensorId}`;
+            sim.hazardNodeId = failoverSensorId;
+            sim.path = failoverPath;
+            this.networkNodes.setNodeStatus(failoverSensorId, 'critical');
+
+            // Re-anchor pulse or rescue marker along new path
+            this.markers.removePulse(sim.id);
+            this.markers.removeRescue(sim.id);
+            if (sim.stage === 'BROADCASTING') {
+              this.markers.createPulse(sim.id, failoverPath);
+            } else if (sim.stage === 'DISPATCHED') {
+              this.markers.createRescue(sim.id, failoverPath);
+            }
+
+            const coverage = this.telemetry.getZoneCoverage(hazardType, this.blockedNodeIds);
+            this.events.emit({
+              type: 'ROUTE_RECONFIGURED',
+              hazardType,
+              hazardNodeId: failoverSensorId,
+              path: failoverPath,
+              isRerouted: true,
+              coverageStatus: coverage.statusText,
+              coverageState: coverage.coverageState,
+              timestamp: this.getTimestamp(),
+              message: `[SENSOR FAILOVER & SELF-HEALING] Primary sensor ${nodeName} OFFLINE. Detection shifted to ${failoverNodeName}. New Route: [${this.formatPathNames(failoverPath)}]`,
+            });
+            continue;
+          }
+        }
+
+        // No healthy sensor available or partitioned
+        this.markers.removePulse(sim.id);
+        this.markers.removeRescue(sim.id);
+        this.events.emit({
+          type: 'NO_ROUTE_AVAILABLE',
+          hazardType,
+          hazardNodeId: sim.hazardNodeId,
+          timestamp: this.getTimestamp(),
+          message: `NO ROUTE AVAILABLE — All sensor detection and egress routes severed for ${spec.zoneTitle}. ACTION REQUIRED: Restore network connectivity.`,
+        });
+        continue;
+      }
+
+      // Origin sensor is still healthy; re-evaluate intermediate mesh route
       const newPath = findShortestPath(sim.hazardNodeId, 0, this.blockedNodeIds);
 
       if (newPath && newPath.length >= 2) {
@@ -82,6 +149,11 @@ export class SimulationEngine {
 
         if (isPathChanged) {
           sim.path = newPath;
+          if (sim.stage === 'BROADCASTING') {
+            this.markers.updatePulseProgress(sim.id, sim.pulseProgress);
+          } else if (sim.stage === 'DISPATCHED') {
+            this.markers.updateRescueProgress(sim.id, sim.rescueProgress);
+          }
           this.events.emit({
             type: 'ROUTE_RECONFIGURED',
             hazardType,
@@ -89,11 +161,11 @@ export class SimulationEngine {
             path: newPath,
             isRerouted: true,
             timestamp: this.getTimestamp(),
-            message: `[SELF-HEALING] ROUTE RECONFIGURED — Cause: ${nodeName} ${blocked ? 'OFFLINE' : 'RESTORED'}. New Route: [${newPath.join(' → ')}]`,
+            message: `[SELF-HEALING] ROUTE RECONFIGURED — Cause: ${nodeName} ${blocked ? 'OFFLINE' : 'RESTORED'}. New Route: [${this.formatPathNames(newPath)}]`,
           });
         }
       } else {
-        // No route available — sever active pulse/rescue and notify command center
+        // Intermediate path severed
         this.markers.removePulse(sim.id);
         this.markers.removeRescue(sim.id);
         this.events.emit({
@@ -133,43 +205,51 @@ export class SimulationEngine {
   }
 
   /**
-   * Triggers a hazard simulation if not already active.
-   * @returns true if started, false if already active/ignored
+   * Triggers a hazard simulation with redundant multi-sensor detection and sensor fusion.
+   * Section 14, 15, 16, 17, 18, 19, 20:
+   * - Selects best available healthy sensor node from the hazard zone cluster.
+   * - Performs multi-sensor fusion.
+   * - Routes SOS through available mesh nodes via BFS to Command Center.
+   * - If all sensors fail (0/3), environmental detection stops (no fake SOS).
    */
   public triggerHazard(type: HazardType): boolean {
-    // Repeated click guard: ignore if already active
     if (this.isHazardActive(type)) {
       return false;
     }
 
     const spec = HAZARD_ZONES[type];
-    const hazardNodeId = spec.targetNodeId;
+    const coverage = this.telemetry.getZoneCoverage(type, this.blockedNodeIds);
 
-    // Check if origin hazard node is offline
-    if (this.blockedNodeIds.has(hazardNodeId)) {
-      console.warn(`Hazard node ${spec.name} is OFFLINE`);
+    // Section 33: NO SENSOR AVAILABLE -> Detection stops, no fake SOS generated
+    if (coverage.coverageState === 'LOST' || coverage.onlineSensors.length === 0) {
+      console.warn(`All sensors in ${spec.zoneTitle} are OFFLINE. Detection unavailable.`);
       this.events.emit({
         type: 'NO_ROUTE_AVAILABLE',
         hazardType: type,
-        hazardNodeId,
         timestamp: this.getTimestamp(),
-        message: `NO_ROUTE_AVAILABLE — ${spec.name} is OFFLINE. Telemetry transmission failed.`,
+        message: `DETECTION UNAVAILABLE — All sensors in ${spec.zoneTitle} are OFFLINE (0/${coverage.totalSensors} online). RESTORE SENSOR COVERAGE to detect hazard.`,
+        coverageStatus: `0/${coverage.totalSensors} sensors online`,
+        coverageState: 'LOST',
       });
       return false;
     }
 
-    // Immediately mark node critical (urgency cue)
-    this.networkNodes.setNodeStatus(hazardNodeId, 'critical');
+    // Best Available Detection Source Selection (Section 19 & 20)
+    const selectedSourceId = this.telemetry.selectBestDetectionSource(type, this.blockedNodeIds);
+    if (selectedSourceId === null) {
+      console.warn(`No operational sensor source available for ${spec.zoneTitle}`);
+      return false;
+    }
 
-    // Immediately start visual hazard effect
-    this.hazardEffects.startHazardEffect(type);
+    const sourceNode = NETWORK_NODES.find((n) => n.id === selectedSourceId);
+    const sourceNodeName = sourceNode ? sourceNode.name : `Node-${selectedSourceId}`;
 
-    // Calculate BFS route to Command Center (Node 0) respecting all blocked nodes
-    const path = findShortestPath(hazardNodeId, 0, this.blockedNodeIds);
+    // Calculate BFS route from the selected healthy sensor to Command Center (Node 0)
+    const path = findShortestPath(selectedSourceId, 0, this.blockedNodeIds);
 
     if (!path || path.length < 2) {
-      console.warn(`No route available from Node ${hazardNodeId} to Command Center`);
-      let failureReason = `No viable mesh path found for ${spec.name}. All redundant routes blocked.`;
+      console.warn(`No viable route from detection source ${sourceNodeName} to Command Center`);
+      let failureReason = `No viable mesh path found from ${sourceNodeName}. All egress routes blocked.`;
       if (this.blockedNodeIds.has(0)) {
         failureReason = 'COMMAND NODE OFFLINE. Rescue dispatch unavailable.';
       }
@@ -177,26 +257,27 @@ export class SimulationEngine {
       this.events.emit({
         type: 'NO_ROUTE_AVAILABLE',
         hazardType: type,
-        hazardNodeId,
+        hazardNodeId: selectedSourceId,
         timestamp: this.getTimestamp(),
-        message: `NO_ROUTE_AVAILABLE — ${failureReason}`,
+        message: `NO ROUTE AVAILABLE — ${failureReason}`,
+        coverageStatus: coverage.statusText,
+        coverageState: coverage.coverageState,
       });
 
-      // Stop hazard visual effect and recover node state after brief warning cue
-      this.hazardEffects.stopHazardEffect(type);
-      setTimeout(() => {
-        if (!this.blockedNodeIds.has(hazardNodeId) && !this.isHazardActive(type)) {
-          this.networkNodes.setNodeStatus(hazardNodeId, 'safe');
-        }
-      }, 1200);
       return false;
     }
+
+    // Immediately mark reporting sensor critical (visual urgency cue)
+    this.networkNodes.setNodeStatus(selectedSourceId, 'critical');
+
+    // Immediately start visual hazard effect
+    this.hazardEffects.startHazardEffect(type);
 
     const simId = `${type}-${Date.now()}`;
     const simulation: HazardSimulation = {
       id: simId,
       hazardType: type,
-      hazardNodeId,
+      hazardNodeId: selectedSourceId,
       stage: 'BROADCASTING',
       path,
       stageStartedAt: 0,
@@ -207,41 +288,56 @@ export class SimulationEngine {
 
     this.activeSimulations.set(type, simulation);
 
-    // Update telemetry state immediately for this active hazard and evaluate edge risk
+    // Update telemetry state and perform Sensor Fusion across healthy sensors in zone
     this.telemetry.update(this.totalElapsedTime + 0.1, this.activeSimulations, this.blockedNodeIds);
-    const assessment = this.telemetry.getEdgeRiskAssessment(hazardNodeId);
-    const routeIntel = this.telemetry.getRouteIntelligence(type, this.blockedNodeIds);
+    const fusion = this.telemetry.getZoneSensorFusion(type, this.blockedNodeIds);
+    const routeIntel = this.telemetry.getRouteIntelligence(type, this.blockedNodeIds, selectedSourceId);
 
-    // Emit initial detection event with complete Edge Intelligence
+    const sourceNames = fusion.contributingSensors.map((s) => s.designation);
+    const primaryName = fusion.primaryDetectionSource?.designation || sourceNodeName;
+    const confirmingNames = fusion.confirmingSources.map((s) => s.designation);
+    const coverageStatusText = `${coverage.onlineSensors.length}/${coverage.totalSensors} sensors online`;
+
+    // Emit initial detection event with complete Sensor Fusion and Edge Intelligence
     this.events.emit({
       type: 'HAZARD_DETECTED',
       hazardType: type,
-      hazardNodeId,
+      hazardNodeId: selectedSourceId,
       path,
-      riskScore: assessment.riskScore,
-      riskLevel: assessment.riskLevel,
-      priority: assessment.priority,
-      classification: assessment.classification,
-      recommendedAction: assessment.recommendedAction,
+      riskScore: fusion.fusedRiskScore,
+      riskLevel: fusion.fusedRiskLevel,
+      priority: fusion.fusedPriority,
+      classification: fusion.classification,
+      recommendedAction: fusion.recommendedAction,
       isRerouted: routeIntel.isRerouted,
+      sources: sourceNames,
+      primarySource: primaryName,
+      confirmingSources: confirmingNames,
+      coverageStatus: coverageStatusText,
+      coverageState: coverage.coverageState,
       timestamp: this.getTimestamp(),
-      message: `[AI EDGE] ${assessment.riskLevel} RISK — ${spec.name} (${assessment.classification}). Score: ${assessment.riskScore}/100. Route: [${path.join(' → ')}]${routeIntel.isRerouted ? ' (REROUTED)' : ''}`,
+      message: `[ALERT] ${fusion.zoneTitle} — ${fusion.fusedRiskLevel} RISK (${fusion.classification}). Sources: [${sourceNames.join(', ')}]. Primary: ${primaryName}. Coverage: ${coverageStatusText}. Score: ${fusion.fusedRiskScore}/100.`,
     });
 
-    // Start Alert Pulse marker along path
+    // Start Alert Pulse marker along BFS path
     this.markers.createPulse(simId, path);
     this.events.emit({
       type: 'BROADCAST_STARTED',
       hazardType: type,
-      hazardNodeId,
+      hazardNodeId: selectedSourceId,
       path,
-      riskScore: assessment.riskScore,
-      riskLevel: assessment.riskLevel,
-      priority: assessment.priority,
-      classification: assessment.classification,
+      riskScore: fusion.fusedRiskScore,
+      riskLevel: fusion.fusedRiskLevel,
+      priority: fusion.fusedPriority,
+      classification: fusion.classification,
       isRerouted: routeIntel.isRerouted,
+      sources: sourceNames,
+      primarySource: primaryName,
+      confirmingSources: confirmingNames,
+      coverageStatus: coverageStatusText,
+      coverageState: coverage.coverageState,
       timestamp: this.getTimestamp(),
-      message: `[TELEMETRY] Broadcasting emergency pulse to Command Center via [${path.join(' → ')}]`,
+      message: `[DISPATCH] SOS transmitted through [${this.formatPathNames(path)}] to Command Center.`,
     });
 
     return true;
@@ -268,47 +364,48 @@ export class SimulationEngine {
 
       switch (sim.stage) {
         case 'BROADCASTING': {
-          // Pulse moves from hazard to Command Center
+          // Pulse moves from reporting hazard sensor to Command Center
           sim.pulseProgress = Math.min(1, sim.elapsedInStage / this.BROADCAST_DURATION);
           this.markers.updatePulseProgress(sim.id, sim.pulseProgress);
 
           if (sim.pulseProgress >= 1) {
-            // Pulse arrived at Command Center
             this.markers.removePulse(sim.id);
-            const assessment = this.telemetry.getEdgeRiskAssessment(sim.hazardNodeId);
+            const fusion = this.telemetry.getZoneSensorFusion(type, this.blockedNodeIds);
+            const reportingNode = NETWORK_NODES.find((n) => n.id === sim.hazardNodeId);
+            const reportingName = reportingNode?.name || `Node-${sim.hazardNodeId}`;
+
             this.events.emit({
               type: 'BROADCAST_COMPLETED',
               hazardType: type,
               hazardNodeId: sim.hazardNodeId,
               path: sim.path,
-              riskScore: assessment.riskScore,
-              riskLevel: assessment.riskLevel,
-              priority: assessment.priority,
-              classification: assessment.classification,
+              riskScore: fusion.fusedRiskScore,
+              riskLevel: fusion.fusedRiskLevel,
+              priority: fusion.fusedPriority,
+              classification: fusion.classification,
               timestamp: this.getTimestamp(),
-              message: `Alert received at Command Center from Node ${sim.hazardNodeId}. Risk Score: ${assessment.riskScore}/100. Authorizing rescue unit.`,
+              message: `Alert received at Command Center from ${reportingName}. Fused Risk: ${fusion.fusedRiskScore}/100. Authorizing rescue unit.`,
             });
 
-            // Transition to DISPATCHED with delay buffer
+            // Transition to DISPATCHED with tactical buffer
             sim.stage = 'DISPATCHED';
-            sim.elapsedInStage = -this.DISPATCH_DELAY; // brief tactical buffer
+            sim.elapsedInStage = -this.DISPATCH_DELAY;
             sim.rescueProgress = 0;
 
             const spec = HAZARD_ZONES[type];
-            // Spawn rescue unit at Command Center
             this.markers.createRescue(sim.id, sim.path);
             this.events.emit({
               type: 'RESCUE_DISPATCHED',
               hazardType: type,
               hazardNodeId: sim.hazardNodeId,
               path: [...sim.path].reverse(),
-              riskScore: assessment.riskScore,
-              riskLevel: assessment.riskLevel,
-              priority: assessment.priority,
-              classification: assessment.classification,
-              recommendedAction: assessment.recommendedAction,
+              riskScore: fusion.fusedRiskScore,
+              riskLevel: fusion.fusedRiskLevel,
+              priority: fusion.fusedPriority,
+              classification: fusion.classification,
+              recommendedAction: fusion.recommendedAction,
               timestamp: this.getTimestamp(),
-              message: `[ACTION] Rescue unit dispatched for ${spec.name}. Action: ${assessment.recommendedAction}`,
+              message: `[ACTION] Rescue unit dispatched for ${spec.zoneTitle}. Route: [${this.formatPathNames([...sim.path].reverse())}]. Action: ${fusion.recommendedAction}`,
             });
           }
           break;
@@ -316,7 +413,6 @@ export class SimulationEngine {
 
         case 'DISPATCHED': {
           if (sim.elapsedInStage < 0) {
-            // In dispatch buffer, rescue unit stays at origin
             this.markers.updateRescueProgress(sim.id, 0);
             break;
           }
@@ -326,21 +422,23 @@ export class SimulationEngine {
           this.markers.updateRescueProgress(sim.id, sim.rescueProgress);
 
           if (sim.rescueProgress >= 1) {
-            // Rescue unit arrived at hazard node
             this.markers.removeRescue(sim.id);
 
-            // Node turns green
+            // Reporting node turns green (resolved)
             this.networkNodes.setNodeStatus(sim.hazardNodeId, 'resolved');
 
             // Stop hazard visual effect
             this.hazardEffects.stopHazardEffect(type);
+
+            const reportingNode = NETWORK_NODES.find((n) => n.id === sim.hazardNodeId);
+            const reportingName = reportingNode?.name || `Node-${sim.hazardNodeId}`;
 
             this.events.emit({
               type: 'RESCUE_ARRIVED',
               hazardType: type,
               hazardNodeId: sim.hazardNodeId,
               timestamp: this.getTimestamp(),
-              message: `Rescue team arrived on site at Node ${sim.hazardNodeId}. Neutralizing hazard.`,
+              message: `Rescue team arrived on site at ${reportingName}. Neutralizing hazard conditions.`,
             });
 
             this.events.emit({
@@ -348,7 +446,7 @@ export class SimulationEngine {
               hazardType: type,
               hazardNodeId: sim.hazardNodeId,
               timestamp: this.getTimestamp(),
-              message: `Hazard resolved at Node ${sim.hazardNodeId}. Restoring telemetry.`,
+              message: `Hazard resolved at ${reportingName}. Restoring environmental baselines.`,
             });
 
             sim.stage = 'RESOLVED';
@@ -360,9 +458,9 @@ export class SimulationEngine {
         case 'RESOLVED': {
           // Hold resolved (green) status for ~0.9s
           if (sim.elapsedInStage >= this.RESOLVED_HOLD) {
-            // Transition node back to safe state
-            this.networkNodes.setNodeStatus(sim.hazardNodeId, 'safe');
-
+            if (!this.blockedNodeIds.has(sim.hazardNodeId)) {
+              this.networkNodes.setNodeStatus(sim.hazardNodeId, 'safe');
+            }
             sim.stage = 'IDLE';
             this.activeSimulations.delete(type);
           }
@@ -390,7 +488,7 @@ export class SimulationEngine {
     this.events.emit({
       type: 'SIMULATION_RESET',
       timestamp: this.getTimestamp(),
-      message: 'System online. Awaiting hazard trigger…',
+      message: 'System online. Multi-sensor environmental monitoring active…',
     });
   }
 

@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import {
   HAZARD_ZONES,
+  ZoneCoverageState,
   getDeterministicFireTrees,
   getDeterministicForestBushes,
   getDeterministicForestRocks,
   getDeterministicIndustrialBuildings,
 } from '../data/hazards';
+import { NETWORK_NODES } from '../data/nodes';
 import { HazardType } from '../simulation/types';
 import { Terrain } from './Terrain';
 
@@ -39,8 +41,20 @@ export class HazardZones {
   // Territory Dormant ↔ Active states
   private territories: Map<HazardType, TerritoryVisualState> = new Map();
 
+  // Territory Coverage States (Section 22)
+  private territoryCoverage: Map<HazardType, ZoneCoverageState> = new Map([
+    ['flood', 'FULL'],
+    ['fire', 'FULL'],
+    ['industrial', 'FULL'],
+  ]);
+
+  // Subtle Sensor Coverage Footprints (Section 26)
+  private sensorFootprints: Map<number, THREE.Mesh> = new Map();
+  private footprintGroup: THREE.Group = new THREE.Group();
+
   constructor() {
     this.group = new THREE.Group();
+    this.group.add(this.footprintGroup);
 
     this.territories.set('flood', { type: 'flood', isActive: false, riskScore: 0, progress: 0, transitionItems: [] });
     this.territories.set('fire', { type: 'fire', isActive: false, riskScore: 0, progress: 0, transitionItems: [] });
@@ -49,6 +63,7 @@ export class HazardZones {
     this.createFloodZone();
     this.createFireZone();
     this.createIndustrialZone();
+    this.buildSensorFootprints();
 
     // Initialize all materials to their dormant baseline
     this.applyTerritoryVisuals('flood', 0);
@@ -567,6 +582,66 @@ export class HazardZones {
   }
 
   /**
+   * Generates subtle sensor coverage footprint rings around cluster sensor nodes (Section 26).
+   */
+  private buildSensorFootprints(): void {
+    const zones = Object.values(HAZARD_ZONES);
+    zones.forEach((hazard) => {
+      const color = new THREE.Color(hazard.color);
+      hazard.sensorNodeIds.forEach((nodeId) => {
+        const node = NETWORK_NODES.find((n) => n.id === nodeId);
+        if (!node) return;
+        const [nx, , nz] = node.position;
+        const ny = Terrain.getElevationAt(nx, nz) + 0.04;
+
+        // Subtle coverage ring (radius ~3.65)
+        const ringGeom = new THREE.RingGeometry(3.1, 3.55, 32);
+        ringGeom.rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: color.clone(),
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+
+        const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+        ringMesh.position.set(nx, ny, nz);
+        this.footprintGroup.add(ringMesh);
+        this.sensorFootprints.set(nodeId, ringMesh);
+        this.disposables.push({ geometry: ringGeom, material: ringMat });
+      });
+    });
+  }
+
+  /**
+   * Updates visual coverage status for a hazard zone.
+   * Section 22:
+   * FULL: normal subtle ring
+   * REDUNDANT: slight coverage indicator
+   * DEGRADED: amber warning ring (#f59e0b)
+   * LOST: critical visual state (#ef4444)
+   */
+  public setTerritoryCoverage(type: HazardType, coverage: ZoneCoverageState): void {
+    this.territoryCoverage.set(type, coverage);
+  }
+
+  /**
+   * Displays subtle ground footprint rings around sensor nodes when zone/sensor is selected.
+   * Section 26: Only when zone/node is selected. Default view remains clean.
+   */
+  public setSelectedSensorCluster(selectedZone: HazardType | null, activeSensorNodeIds?: number[] | null): void {
+    for (const [nodeId, mesh] of this.sensorFootprints.entries()) {
+      const mat = mesh.material as THREE.MeshBasicMaterial;
+      const shouldShow =
+        (selectedZone && HAZARD_ZONES[selectedZone]?.sensorNodeIds.includes(nodeId)) ||
+        (activeSensorNodeIds && activeSensorNodeIds.includes(nodeId));
+
+      mat.opacity = shouldShow ? 0.38 : 0;
+    }
+  }
+
+  /**
    * Dynamically sets the edge risk score (0 - 100) for a territory.
    * Directly drives risk-based visual emphasis (Low, Moderate, High, Critical).
    */
@@ -595,20 +670,18 @@ export class HazardZones {
       state.isActive = false;
       state.riskScore = 0;
       state.progress = 0;
+      this.territoryCoverage.set(type, 'FULL');
       this.applyTerritoryVisuals(type, 0);
       if (state.borderRibbon && state.borderRibbon.material) {
         (state.borderRibbon.material as THREE.MeshBasicMaterial).opacity = 0.65;
       }
     }
+    this.setSelectedSensorCluster(null);
   }
 
   /**
    * Per-frame animation loop interpolating Dormant ↔ Active transitions.
-   * Maps Edge Risk Score (0-100) to visual intensity:
-   * 0-24 LOW: 0-0.12 (calm rest)
-   * 25-49 MODERATE: 0.25-0.45 (subtle warning warmth)
-   * 50-74 HIGH: 0.50-0.72 (clear visual emphasis)
-   * 75-100 CRITICAL: 0.80-1.0 (strong visual presence)
+   * Section 22: communicates zone coverage (FULL, REDUNDANT, DEGRADED, LOST) on boundary rings.
    */
   public update(deltaTime: number, elapsedTime: number = 0): void {
     const transitionSpeed = 1.25; // 1 / 0.8s
@@ -626,15 +699,32 @@ export class HazardZones {
         this.applyTerritoryVisuals(type, state.progress);
       }
 
-      // Breathing perimeter ribbon effect when risk is elevated
+      // Coverage-aware perimeter ribbon styling
+      const coverage = this.territoryCoverage.get(type) || 'FULL';
       if (state.borderRibbon && state.borderRibbon.material) {
         const mat = state.borderRibbon.material as THREE.MeshBasicMaterial;
-        if (state.riskScore >= 25 || state.isActive) {
-          const freq = state.riskScore >= 75 || state.isActive ? 4.5 : state.riskScore >= 50 ? 2.8 : 1.5;
-          const pulse = 0.55 + 0.35 * Math.sin(elapsedTime * freq);
-          mat.opacity = THREE.MathUtils.lerp(0.65, 0.95, pulse * (state.riskScore / 100));
+
+        if (coverage === 'LOST') {
+          // Critical lost state: pulsing amber-red warning
+          mat.color.set('#ef4444');
+          mat.opacity = 0.35 + 0.28 * Math.sin(elapsedTime * 5.0);
+        } else if (coverage === 'DEGRADED') {
+          // Amber warning: single sensor remaining
+          mat.color.set('#f59e0b');
+          mat.opacity = 0.72 + 0.15 * Math.sin(elapsedTime * 2.5);
         } else {
-          mat.opacity = 0.65;
+          // Normal zone colors (FULL or REDUNDANT)
+          const activeCol = new THREE.Color(HAZARD_ZONES[type].color);
+          const dormantCol = this.makeDormantColor(HAZARD_ZONES[type].color);
+          mat.color.copy(dormantCol).lerp(activeCol, state.progress);
+
+          if (state.riskScore >= 25 || state.isActive) {
+            const freq = state.riskScore >= 75 || state.isActive ? 4.5 : state.riskScore >= 50 ? 2.8 : 1.5;
+            const pulse = 0.55 + 0.35 * Math.sin(elapsedTime * freq);
+            mat.opacity = THREE.MathUtils.lerp(0.65, 0.95, pulse * (state.riskScore / 100));
+          } else {
+            mat.opacity = coverage === 'REDUNDANT' ? 0.72 : 0.65;
+          }
         }
       }
     }

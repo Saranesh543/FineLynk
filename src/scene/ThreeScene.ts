@@ -119,8 +119,17 @@ export class ThreeScene {
     this.interactionManager.onSelect((target) => {
       if (target && target.type === 'node') {
         this.networkNodes.setSelectedNode(target.id);
+        if (target.sensorRole) {
+          this.hazardZones.setSelectedSensorCluster(target.sensorRole.zoneId, [target.id]);
+        } else {
+          this.hazardZones.setSelectedSensorCluster(null);
+        }
+      } else if (target && target.type === 'hazard') {
+        this.networkNodes.setSelectedNode(null);
+        this.hazardZones.setSelectedSensorCluster(target.id, target.sensorNodeIds);
       } else {
         this.networkNodes.setSelectedNode(null);
+        this.hazardZones.setSelectedSensorCluster(null);
       }
     });
 
@@ -257,18 +266,24 @@ export class ThreeScene {
       // Camera interpolation
       this.customCamera.update();
 
-      // 1. Synchronize real-time edge risk scores with 3D Territories and Node Beacons
-      const floodAssessment = this.simulationEngine.telemetry.getEdgeRiskAssessment(1);
-      const fireAssessment = this.simulationEngine.telemetry.getEdgeRiskAssessment(2);
-      const indusAssessment = this.simulationEngine.telemetry.getEdgeRiskAssessment(3);
+      // 1. Synchronize real-time edge risk scores & zone coverage with 3D Territories and Node Beacons
+      const floodFusion = this.simulationEngine.telemetry.getZoneSensorFusion('flood', this.simulationEngine.blockedNodeIds);
+      const fireFusion = this.simulationEngine.telemetry.getZoneSensorFusion('fire', this.simulationEngine.blockedNodeIds);
+      const indusFusion = this.simulationEngine.telemetry.getZoneSensorFusion('industrial', this.simulationEngine.blockedNodeIds);
 
-      this.hazardZones.setTerritoryRisk('flood', floodAssessment.riskScore);
-      this.hazardZones.setTerritoryRisk('fire', fireAssessment.riskScore);
-      this.hazardZones.setTerritoryRisk('industrial', indusAssessment.riskScore);
+      this.hazardZones.setTerritoryRisk('flood', floodFusion.fusedRiskScore);
+      this.hazardZones.setTerritoryRisk('fire', fireFusion.fusedRiskScore);
+      this.hazardZones.setTerritoryRisk('industrial', indusFusion.fusedRiskScore);
 
-      this.networkNodes.updateNodeRisk(1, floodAssessment.riskScore);
-      this.networkNodes.updateNodeRisk(2, fireAssessment.riskScore);
-      this.networkNodes.updateNodeRisk(3, indusAssessment.riskScore);
+      this.hazardZones.setTerritoryCoverage('flood', floodFusion.coverage.coverageState);
+      this.hazardZones.setTerritoryCoverage('fire', fireFusion.coverage.coverageState);
+      this.hazardZones.setTerritoryCoverage('industrial', indusFusion.coverage.coverageState);
+
+      // Update beacon risk for all 9 sensor nodes
+      [1, 7, 9, 2, 11, 13, 3, 15, 17].forEach((id) => {
+        const assessment = this.simulationEngine.telemetry.getEdgeRiskAssessment(id);
+        this.networkNodes.updateNodeRisk(id, assessment.riskScore);
+      });
 
       // 2. Synchronize active tactical BFS routes for luminous mesh link illumination
       const activePaths: number[][] = [];

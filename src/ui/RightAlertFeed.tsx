@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Terminal, ShieldAlert, CheckCircle2, Navigation, Radio } from 'lucide-react';
 import { SimulationEventEmitter } from '../simulation/events';
 import { SimulationEvent } from '../simulation/types';
 
@@ -14,6 +15,11 @@ export interface AlertLogItem {
   classification?: string;
   recommendedAction?: string;
   isRerouted?: boolean;
+  sources?: string[];
+  primarySource?: string;
+  confirmingSources?: string[];
+  coverageStatus?: string;
+  coverageState?: string;
 }
 
 interface RightAlertFeedProps {
@@ -66,20 +72,19 @@ export const RightAlertFeed: React.FC<RightAlertFeedProps> = ({ events }) => {
             id: `reset-${Date.now()}`,
             time: event.timestamp,
             type: 'SYSTEM',
-            message: 'System online. Edge telemetry monitoring active…',
+            message: 'System reset. Pristine operational baseline active.',
           },
         ]);
         return;
       }
 
-      // Filter out high-frequency pulse movement ticks
       if (event.type === 'BROADCAST_STARTED' || event.type === 'RESCUE_ARRIVED') {
         return;
       }
 
       setLogs((prev) => {
         const newItem: AlertLogItem = {
-          id: `log-${Date.now()}-${Math.random()}`,
+          id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           time: event.timestamp,
           type: mapEventType(event.type),
           message: event.message,
@@ -89,8 +94,13 @@ export const RightAlertFeed: React.FC<RightAlertFeedProps> = ({ events }) => {
           classification: event.classification,
           recommendedAction: event.recommendedAction,
           isRerouted: event.isRerouted,
+          sources: event.sources,
+          primarySource: event.primarySource,
+          confirmingSources: event.confirmingSources,
+          coverageStatus: event.coverageStatus,
+          coverageState: event.coverageState,
         };
-        // Strict cap at 10 items maximum per Section 14
+        // Keep up to 10 latest entries
         return [...prev.slice(-9), newItem];
       });
     });
@@ -102,254 +112,390 @@ export const RightAlertFeed: React.FC<RightAlertFeedProps> = ({ events }) => {
     listEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  const getStatusColor = (type: AlertLogItem['type'], riskLevel?: string) => {
+    if (riskLevel === 'CRITICAL' || type === 'ALERT') return 'var(--critical)';
+    if (type === 'DISPATCH' || riskLevel === 'HIGH') return 'var(--command)';
+    if (type === 'REROUTE') return 'var(--fire)';
+    if (type === 'RESOLVED') return 'var(--resolved)';
+    return 'var(--cyan)';
+  };
+
+  const getStatusIcon = (type: AlertLogItem['type']) => {
+    switch (type) {
+      case 'ALERT':
+        return <ShieldAlert size={12} />;
+      case 'DISPATCH':
+        return <Navigation size={12} />;
+      case 'RESOLVED':
+        return <CheckCircle2 size={12} />;
+      case 'REROUTE':
+        return <Radio size={12} />;
+      case 'SYSTEM':
+      default:
+        return <Terminal size={12} />;
+    }
+  };
+
   return (
-    <aside className="interactive tactical-panel right-panel" aria-label="Tactical Alert Feed">
-      <div className="panel-header alert-header">
-        <div className="alert-header-left">
-          <Terminal size={14} color="var(--cyan)" />
-          <span>ALERT FEED</span>
-          <span className="sim-telemetry-tag">SIMULATED</span>
+    <aside className="interactive glass-panel right-incident-stream" aria-label="Live Incident Stream">
+      {/* Stream Header */}
+      <div className="stream-header">
+        <div className="stream-header-left">
+          <span className="stream-kicker">FineLynk Live</span>
+          <h2 className="stream-title">Incident Stream</h2>
         </div>
-        <span className="live-pill">REC</span>
+        <div className="rec-indicator" title="Live operational recording active">
+          <span className="rec-dot" />
+          <span className="rec-text">REC</span>
+        </div>
       </div>
 
-      <div className="alert-feed-list" role="log" aria-live="polite">
-        {logs.map((log) => (
-          <div key={log.id} className={`alert-entry type-${log.type.toLowerCase()}`}>
-            <div className="entry-meta">
-              <span className="entry-time">[{log.time}]</span>
-              <span className={`entry-tag tag-${log.type.toLowerCase()}`}>{log.type}</span>
-              {log.riskLevel && (
-                <span className={`entry-risk-tag tag-${log.riskLevel.toLowerCase()}`}>
-                  {log.riskLevel}
-                </span>
-              )}
-            </div>
+      <div className="glass-divider" />
 
-            <div className="entry-text">{log.message}</div>
+      {/* Vertical Timeline Stream */}
+      <div className="timeline-container" role="log" aria-live="polite">
+        <div className="timeline-track" />
+        <AnimatePresence initial={false}>
+          {logs.map((log) => {
+            const color = getStatusColor(log.type, log.riskLevel);
+            const isCritical = log.type === 'ALERT' || log.riskLevel === 'CRITICAL';
 
-            {/* Environmental Intelligence Metadata Card */}
-            {(log.riskScore !== undefined || log.classification || log.recommendedAction || log.isRerouted) && (
-              <div className="entry-intel-card">
-                {log.riskScore !== undefined && (
-                  <div className="intel-row">
-                    <span className="intel-label">EDGE RISK:</span>
-                    <span className="intel-val">{log.riskScore} / 100 ({log.priority})</span>
+            return (
+              <motion.div
+                key={log.id}
+                className={`timeline-entry ${isCritical ? 'is-critical' : ''}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+              >
+                {/* Node on vertical timeline */}
+                <div
+                  className="timeline-node"
+                  style={{
+                    color,
+                    borderColor: color,
+                    boxShadow: `0 0 8px ${color}40`,
+                  }}
+                >
+                  {getStatusIcon(log.type)}
+                </div>
+
+                {/* Entry Content */}
+                <div className="entry-content">
+                  <div className="entry-header-row">
+                    <span className="entry-time">{log.time}</span>
+                    <span
+                      className="entry-badge"
+                      style={{ color, borderColor: `${color}40`, backgroundColor: `${color}15` }}
+                    >
+                      {log.type}
+                    </span>
+                    {log.riskLevel && (
+                      <span className={`entry-risk-pill risk-${log.riskLevel.toLowerCase()}`}>
+                        {log.riskLevel}
+                      </span>
+                    )}
                   </div>
-                )}
-                {log.classification && (
-                  <div className="intel-row">
-                    <span className="intel-label">CLASS:</span>
-                    <span className="intel-val">{log.classification}</span>
-                  </div>
-                )}
-                {log.isRerouted && (
-                  <div className="intel-reroute-notice">
-                    ⚡ REROUTED VIA RESILIENT MESH
-                  </div>
-                )}
-                {log.recommendedAction && (
-                  <div className="intel-action-row">
-                    <span className="intel-action-label">ACTION:</span>
-                    <span className="intel-action-text">{log.recommendedAction}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+
+                  <p className="entry-msg">{log.message}</p>
+
+                  {/* Refined Contextual Details without nested boxes */}
+                  {(log.riskScore !== undefined || log.classification || log.isRerouted || log.sources || log.recommendedAction) && (
+                    <div className="entry-details">
+                      {log.sources && log.sources.length > 0 && (
+                        <div className="detail-row">
+                          <span className="detail-key">Sources</span>
+                          <span className="detail-val sources">{log.sources.join(', ')}</span>
+                        </div>
+                      )}
+
+                      {log.riskScore !== undefined && (
+                        <div className="detail-row">
+                          <span className="detail-key">Risk Score</span>
+                          <span className="detail-val score" style={{ color }}>
+                            {log.riskScore} / 100 {log.priority ? `(${log.priority})` : ''}
+                          </span>
+                        </div>
+                      )}
+
+                      {log.isRerouted && (
+                        <div className="reroute-badge">
+                          ⚡ Rerouted via Resilient Mesh
+                        </div>
+                      )}
+
+                      {log.recommendedAction && (
+                        <div className="action-row">
+                          <span className="action-tag">ACTION</span>
+                          <span className="action-text">{log.recommendedAction}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
         <div ref={listEndRef} />
       </div>
 
       <style>{`
-        .right-panel {
-          width: 285px;
+        .right-incident-stream {
+          width: 310px;
           margin-top: 14px;
           margin-right: 18px;
+          padding: 14px;
           display: flex;
           flex-direction: column;
           max-height: 520px;
         }
 
-        .alert-header {
+        .stream-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding-bottom: 8px;
-          border-bottom: 1px solid var(--border);
         }
 
-        .alert-header-left {
+        .stream-header-left {
           display: flex;
-          align-items: center;
-          gap: 6px;
+          flex-direction: column;
+          gap: 1px;
         }
 
-        .sim-telemetry-tag {
-          font-family: var(--font-mono);
-          font-size: 0.54rem;
+        .stream-kicker {
+          font-family: var(--font-heading);
+          font-size: 0.60rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
           color: var(--cyan);
-          background: rgba(45, 212, 238, 0.1);
-          border: 1px solid rgba(45, 212, 238, 0.25);
-          padding: 1px 4px;
-          border-radius: 3px;
+        }
+
+        .stream-title {
+          font-family: var(--font-heading);
+          font-size: 0.90rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          letter-spacing: 0.02em;
+          margin: 0;
+        }
+
+        .rec-indicator {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 2px 7px;
+          border-radius: var(--radius-pill);
+          background: rgba(244, 63, 94, 0.1);
+          border: 1px solid rgba(244, 63, 94, 0.25);
+        }
+
+        .rec-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--critical);
+          animation: blinkRec 1.6s ease-in-out infinite;
+        }
+
+        @keyframes blinkRec {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.3; transform: scale(0.85); }
+        }
+
+        .rec-text {
+          font-family: var(--font-mono);
+          font-size: 0.60rem;
+          font-weight: 700;
+          color: var(--critical);
           letter-spacing: 0.05em;
         }
 
-        .live-pill {
-          font-family: var(--font-mono);
-          font-size: 0.6rem;
-          font-weight: 700;
-          color: var(--critical);
-          background-color: rgba(239, 68, 68, 0.15);
-          padding: 1px 5px;
-          border-radius: 4px;
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          animation: blink 2s infinite;
-        }
-
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-
-        .alert-feed-list {
+        .timeline-container {
+          position: relative;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 12px;
           overflow-y: auto;
-          padding-top: 8px;
+          padding-left: 20px;
+          padding-right: 4px;
           flex: 1;
         }
 
-        .alert-entry {
-          background-color: rgba(15, 28, 51, 0.65);
-          border-left: 3px solid var(--border);
-          padding: 6px 8px;
-          border-radius: 0 4px 4px 0;
-          font-size: 0.72rem;
+        .timeline-track {
+          position: absolute;
+          top: 8px;
+          bottom: 12px;
+          left: 9px;
+          width: 1px;
+          background: rgba(255, 255, 255, 0.08);
+        }
+
+        .timeline-entry {
+          position: relative;
           display: flex;
           flex-direction: column;
           gap: 3px;
         }
 
-        .alert-entry.type-system { border-left-color: var(--cyan); }
-        .alert-entry.type-alert { border-left-color: var(--critical); }
-        .alert-entry.type-dispatch { border-left-color: var(--command); }
-        .alert-entry.type-resolved { border-left-color: var(--resolved); }
-        .alert-entry.type-reroute { border-left-color: var(--fire); background-color: rgba(28, 22, 34, 0.75); }
-
-        .entry-meta {
+        .timeline-node {
+          position: absolute;
+          left: -20px;
+          top: 3px;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: rgba(8, 18, 34, 0.9);
+          border: 1px solid;
           display: flex;
           align-items: center;
-          gap: 6px;
-          font-size: 0.63rem;
+          justify-content: center;
+          z-index: 2;
         }
 
-        .entry-time {
-          color: var(--text-dim);
-          font-family: var(--font-mono);
-        }
-
-        .entry-tag {
-          font-weight: 700;
-          padding: 1px 4px;
-          border-radius: 2px;
-          font-size: 0.58rem;
-          letter-spacing: 0.03em;
-        }
-
-        .tag-system { background: rgba(45, 212, 238, 0.15); color: var(--cyan); }
-        .tag-alert { background: rgba(239, 68, 68, 0.15); color: var(--critical); }
-        .tag-dispatch { background: rgba(251, 191, 36, 0.15); color: var(--command); }
-        .tag-resolved { background: rgba(52, 211, 153, 0.15); color: var(--resolved); }
-        .tag-reroute { background: rgba(249, 115, 22, 0.2); color: var(--fire); border: 1px solid rgba(249, 115, 22, 0.4); }
-
-        .entry-risk-tag {
-          font-family: var(--font-mono);
-          font-weight: 700;
-          font-size: 0.55rem;
-          padding: 1px 4px;
-          border-radius: 2px;
-          margin-left: auto;
-        }
-
-        .entry-risk-tag.tag-critical { background: rgba(239, 68, 68, 0.25); color: var(--critical); }
-        .entry-risk-tag.tag-high { background: rgba(249, 115, 22, 0.25); color: var(--fire); }
-        .entry-risk-tag.tag-moderate { background: rgba(251, 191, 36, 0.25); color: var(--command); }
-        .entry-risk-tag.tag-low { background: rgba(45, 212, 238, 0.2); color: var(--cyan); }
-
-        .entry-text {
-          color: var(--text);
-          line-height: 1.35;
-          word-break: break-word;
-          font-size: 0.7rem;
-        }
-
-        .entry-intel-card {
-          background: rgba(12, 21, 38, 0.9);
-          border: 1px solid rgba(45, 212, 238, 0.18);
-          border-radius: 4px;
-          padding: 4px 6px;
-          margin-top: 3px;
+        .entry-content {
           display: flex;
           flex-direction: column;
           gap: 2px;
-          font-size: 0.63rem;
         }
 
-        .intel-row {
+        .entry-header-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .entry-time {
+          font-family: var(--font-mono);
+          font-size: 0.62rem;
+          color: var(--text-muted);
+        }
+
+        .entry-badge {
+          font-family: var(--font-mono);
+          font-size: 0.54rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          padding: 1px 4px;
+          border-radius: 3px;
+          border: 1px solid;
+        }
+
+        .entry-risk-pill {
+          margin-left: auto;
+          font-family: var(--font-mono);
+          font-size: 0.54rem;
+          font-weight: 700;
+          padding: 1px 5px;
+          border-radius: 3px;
+        }
+
+        .entry-risk-pill.risk-critical {
+          color: var(--critical);
+          background: rgba(244, 63, 94, 0.15);
+        }
+
+        .entry-risk-pill.risk-high {
+          color: var(--fire);
+          background: rgba(249, 115, 22, 0.15);
+        }
+
+        .entry-risk-pill.risk-moderate {
+          color: var(--command);
+          background: rgba(251, 191, 36, 0.15);
+        }
+
+        .entry-risk-pill.risk-low {
+          color: var(--cyan);
+          background: rgba(34, 211, 238, 0.12);
+        }
+
+        .entry-msg {
+          font-family: var(--font-heading);
+          font-size: 0.70rem;
+          color: var(--text-primary);
+          line-height: 1.35;
+          margin: 0;
+        }
+
+        .timeline-entry.is-critical .entry-msg {
+          color: #ffffff;
+          font-weight: 600;
+        }
+
+        .entry-details {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding-left: 6px;
+          border-left: 1px solid rgba(255, 255, 255, 0.08);
+          margin-top: 2px;
+        }
+
+        .detail-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          font-size: 0.62rem;
         }
 
-        .intel-label {
-          color: var(--text-dim);
+        .detail-key {
+          color: var(--text-muted);
+          font-size: 0.58rem;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+
+        .detail-val {
+          font-family: var(--font-mono);
+          color: var(--text-secondary);
+        }
+
+        .detail-val.sources {
+          color: var(--cyan);
+        }
+
+        .detail-val.score {
           font-weight: 600;
-          font-size: 0.58rem;
         }
 
-        .intel-val {
-          color: var(--text);
+        .reroute-badge {
+          display: inline-flex;
           font-family: var(--font-mono);
-          font-weight: 700;
-        }
-
-        .intel-reroute-notice {
+          font-size: 0.58rem;
           color: var(--fire);
-          font-family: var(--font-mono);
-          font-size: 0.58rem;
-          font-weight: 700;
-          background: rgba(249, 115, 22, 0.12);
-          border: 1px solid rgba(249, 115, 22, 0.3);
-          border-radius: 2px;
           padding: 1px 4px;
+          background: rgba(249, 115, 22, 0.08);
+          border-radius: 3px;
           margin-top: 2px;
+          align-self: flex-start;
         }
 
-        .intel-action-row {
+        .action-row {
           display: flex;
-          flex-direction: column;
+          align-items: baseline;
+          gap: 5px;
           margin-top: 2px;
-          border-top: 1px dashed rgba(28, 44, 71, 0.8);
-          padding-top: 2px;
         }
 
-        .intel-action-label {
-          color: var(--command);
-          font-size: 0.56rem;
+        .action-tag {
+          font-family: var(--font-mono);
+          font-size: 0.52rem;
           font-weight: 700;
+          color: var(--command);
+          flex-shrink: 0;
         }
 
-        .intel-action-text {
-          color: var(--text);
-          font-size: 0.63rem;
+        .action-text {
+          font-size: 0.64rem;
+          color: var(--text-secondary);
           line-height: 1.25;
         }
 
-        @media (max-width: 760px) {
-          .right-panel {
+        @media (max-width: 860px) {
+          .right-incident-stream {
             display: none;
           }
         }

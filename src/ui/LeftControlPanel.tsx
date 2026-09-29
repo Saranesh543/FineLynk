@@ -1,7 +1,8 @@
 import React from 'react';
-import { Waves, Flame, Biohazard, Network, Tag, RotateCcw } from 'lucide-react';
+import { Waves, Flame, Biohazard, Network, Tag, RotateCcw, ChevronRight } from 'lucide-react';
 import { HazardType } from '../simulation/types';
-import { NETWORK_NODES } from '../data/nodes';
+import { NETWORK_NODES, getNodeSensorRole } from '../data/nodes';
+import { getZoneCoverage } from '../simulation/telemetry';
 
 interface LeftControlPanelProps {
   showLinks: boolean;
@@ -28,113 +29,184 @@ export const LeftControlPanel: React.FC<LeftControlPanelProps> = ({
   selectedNodeId = null,
   onSelectNode,
   failedNodeIds = new Set(),
-  onToggleNodeFailure,
 }) => {
+  const floodCov = getZoneCoverage('flood', failedNodeIds);
+  const fireCov = getZoneCoverage('fire', failedNodeIds);
+  const indusCov = getZoneCoverage('industrial', failedNodeIds);
+
+  const onlineNodesCount = NETWORK_NODES.length - failedNodeIds.size;
+
   return (
-    <aside className="interactive tactical-panel left-panel" aria-label="Tactical Command Controls">
-      {/* SECTION 1: TRIGGER HAZARD */}
-      <div className="panel-header">
-        <span>Trigger Hazard</span>
+    <aside className="interactive glass-panel left-command-dock" aria-label="Incident & Network Command Dock">
+      {/* Header */}
+      <div className="dock-header">
+        <span className="dock-kicker">FineLynk</span>
+        <h2 className="dock-title">Incident Control</h2>
       </div>
 
-      <div className="hazard-buttons" role="group" aria-label="Hazard Triggers">
+      <div className="glass-divider" />
+
+      {/* SECTION 1: INCIDENTS */}
+      <div className="glass-section-header">
+        <span>Incidents</span>
+        <span className="header-meta">Simulate</span>
+      </div>
+
+      <div className="hazard-rows-group" role="group" aria-label="Hazard Triggers">
+        {/* Flood Row */}
         <button
           type="button"
-          className={`tactical-btn tactical-btn-hazard ${activeHazards.flood ? 'hazard-active flood' : ''}`}
-          data-hazard="flood"
-          aria-label="Trigger Flood at Node Flood-04"
-          aria-pressed={activeHazards.flood}
-          disabled={activeHazards.flood}
+          className={`hazard-row ${activeHazards.flood ? 'is-active flood' : ''} ${
+            floodCov.detectionState === 'UNAVAILABLE' ? 'is-disabled' : ''
+          }`}
           onClick={() => onTriggerHazard('flood')}
+          disabled={activeHazards.flood || floodCov.detectionState === 'UNAVAILABLE'}
+          aria-pressed={activeHazards.flood}
+          aria-label="Simulate Flood in River Basin"
         >
-          <Waves size={15} color="var(--flood)" />
-          <span>Flood — Node Flood-04</span>
-          {activeHazards.flood && <span className="active-dot flood" />}
+          <div className="hazard-icon-box flood">
+            <Waves size={15} />
+          </div>
+          <div className="hazard-info">
+            <span className="hazard-name">Flood</span>
+            <span className="hazard-origin">
+              Flood-04 • {floodCov.onlineSensors.length}/{floodCov.totalSensors} {floodCov.coverageState}
+            </span>
+          </div>
+          <div className="hazard-action-indicator">
+            {activeHazards.flood ? (
+              <span className="active-badge flood">
+                <span className="active-dot" /> ACTIVE
+              </span>
+            ) : (
+              <ChevronRight size={14} className="action-arrow" />
+            )}
+          </div>
         </button>
 
+        {/* Forest Fire Row */}
         <button
           type="button"
-          className={`tactical-btn tactical-btn-hazard ${activeHazards.fire ? 'hazard-active fire' : ''}`}
-          data-hazard="fire"
-          aria-label="Trigger Forest Fire at Node Forest-07"
-          aria-pressed={activeHazards.fire}
-          disabled={activeHazards.fire}
+          className={`hazard-row ${activeHazards.fire ? 'is-active fire' : ''} ${
+            fireCov.detectionState === 'UNAVAILABLE' ? 'is-disabled' : ''
+          }`}
           onClick={() => onTriggerHazard('fire')}
+          disabled={activeHazards.fire || fireCov.detectionState === 'UNAVAILABLE'}
+          aria-pressed={activeHazards.fire}
+          aria-label="Simulate Forest Fire in Mountain Sector"
         >
-          <Flame size={15} color="var(--fire)" />
-          <span>Forest Fire — Node Forest-07</span>
-          {activeHazards.fire && <span className="active-dot fire" />}
+          <div className="hazard-icon-box fire">
+            <Flame size={15} />
+          </div>
+          <div className="hazard-info">
+            <span className="hazard-name">Forest Fire</span>
+            <span className="hazard-origin">
+              Forest-07 • {fireCov.onlineSensors.length}/{fireCov.totalSensors} {fireCov.coverageState}
+            </span>
+          </div>
+          <div className="hazard-action-indicator">
+            {activeHazards.fire ? (
+              <span className="active-badge fire">
+                <span className="active-dot" /> ACTIVE
+              </span>
+            ) : (
+              <ChevronRight size={14} className="action-arrow" />
+            )}
+          </div>
         </button>
 
+        {/* Industrial Row */}
         <button
           type="button"
-          className={`tactical-btn tactical-btn-hazard ${activeHazards.industrial ? 'hazard-active industrial' : ''}`}
-          data-hazard="industrial"
-          aria-label="Trigger Industrial Leak at Node Indus-02"
-          aria-pressed={activeHazards.industrial}
-          disabled={activeHazards.industrial}
+          className={`hazard-row ${activeHazards.industrial ? 'is-active industrial' : ''} ${
+            indusCov.detectionState === 'UNAVAILABLE' ? 'is-disabled' : ''
+          }`}
           onClick={() => onTriggerHazard('industrial')}
+          disabled={activeHazards.industrial || indusCov.detectionState === 'UNAVAILABLE'}
+          aria-pressed={activeHazards.industrial}
+          aria-label="Simulate Industrial Chemical Incident"
         >
-          <Biohazard size={15} color="var(--industrial)" />
-          <span>Industrial Leak — Node Indus-02</span>
-          {activeHazards.industrial && <span className="active-dot industrial" />}
+          <div className="hazard-icon-box industrial">
+            <Biohazard size={15} />
+          </div>
+          <div className="hazard-info">
+            <span className="hazard-name">Industrial</span>
+            <span className="hazard-origin">
+              Indus-02 • {indusCov.onlineSensors.length}/{indusCov.totalSensors} {indusCov.coverageState}
+            </span>
+          </div>
+          <div className="hazard-action-indicator">
+            {activeHazards.industrial ? (
+              <span className="active-badge industrial">
+                <span className="active-dot" /> ACTIVE
+              </span>
+            ) : (
+              <ChevronRight size={14} className="action-arrow" />
+            )}
+          </div>
         </button>
       </div>
 
-      <div className="panel-divider" />
+      <div className="glass-divider" />
 
-      {/* SECTION 2: NETWORK NODES MATRIX (ALL 24 NODES) */}
-      <div className="panel-header">
-        <span>Nodes ({NETWORK_NODES.length - failedNodeIds.size}/{NETWORK_NODES.length} Online)</span>
+      {/* SECTION 2: COMPACT NODE NAVIGATOR (ALL 24 NODES) */}
+      <div className="glass-section-header">
+        <span>Nodes</span>
+        <span className="node-online-count">
+          {onlineNodesCount} / {NETWORK_NODES.length} Online
+        </span>
       </div>
 
-      <div className="nodes-matrix" role="group" aria-label="Universal Nodes Quick List">
-        {NETWORK_NODES.map((n) => {
-          const isFailed = failedNodeIds.has(n.id);
-          const isSelected = selectedNodeId === n.id;
+      <div className="node-navigator-list" role="listbox" aria-label="24 Node Navigator">
+        {NETWORK_NODES.map((node) => {
+          const isFailed = failedNodeIds.has(node.id);
+          const isSelected = selectedNodeId === node.id;
+          const sensorRole = getNodeSensorRole(node.id);
+
           return (
             <div
-              key={n.id}
-              className={`node-matrix-item ${isSelected ? 'selected' : ''} ${isFailed ? 'failed' : ''}`}
-              onClick={() => onSelectNode && onSelectNode(n.id)}
-              title={`Click to inspect ${n.name}`}
+              key={node.id}
+              role="option"
+              aria-selected={isSelected}
+              className={`node-nav-row ${isSelected ? 'selected' : ''} ${isFailed ? 'failed' : ''}`}
+              onClick={() => onSelectNode && onSelectNode(node.id)}
+              title={`${node.name} — ${isFailed ? 'OFFLINE (Select to inspect/restore)' : 'ONLINE (Select to inspect)'}`}
             >
-              <div className="node-item-left">
-                <span className={`node-dot ${isFailed ? 'failed' : n.isCommandCenter ? 'command' : 'online'}`} />
-                <span className="node-item-name">{n.name}</span>
+              <div className="node-row-left">
+                <span
+                  className={`glass-status-dot ${
+                    isFailed ? 'critical' : node.isCommandCenter ? 'command' : 'cyan'
+                  }`}
+                />
+                <span className="node-nav-name">{node.name}</span>
+                {sensorRole && (
+                  <span className={`sensor-tag ${sensorRole.zoneId} ${isFailed ? 'severed' : ''}`}>
+                    {sensorRole.designation}
+                  </span>
+                )}
               </div>
-              {onToggleNodeFailure && (
-                <button
-                  type="button"
-                  className={`node-fail-mini-btn ${isFailed ? 'btn-restore' : 'btn-fail'}`}
-                  title={isFailed ? `Restore ${n.name}` : `Simulate failure on ${n.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleNodeFailure(n.id, !isFailed);
-                  }}
-                >
-                  {isFailed ? 'RESTORE' : 'FAIL'}
-                </button>
-              )}
+              <span className="node-row-state">
+                {isFailed ? 'OFFLINE' : isSelected ? 'INSPECT' : ''}
+              </span>
             </div>
           );
         })}
       </div>
 
-      <div className="panel-divider" />
+      <div className="glass-divider" />
 
-      {/* SECTION 3: MESH VIEW */}
-      <div className="panel-header">
-        <span>Mesh View</span>
+      {/* SECTION 3: NETWORK DISPLAY CONTROLS */}
+      <div className="glass-section-header">
+        <span>Network Layers</span>
       </div>
 
-      <div className="mesh-toggles" role="group" aria-label="Mesh Visibility Toggles">
+      <div className="network-toggles-group">
         <div
-          className="toggle-row"
+          className="glass-toggle-row"
           onClick={() => onToggleLinks(!showLinks)}
           role="switch"
           aria-checked={showLinks}
-          aria-label="Show mesh links"
+          aria-label="Toggle mesh links"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === ' ' || e.key === 'Enter') {
@@ -143,21 +215,21 @@ export const LeftControlPanel: React.FC<LeftControlPanelProps> = ({
             }
           }}
         >
-          <div className="toggle-label-with-icon">
-            <Network size={13} />
-            <span>Show mesh links</span>
+          <div className="toggle-info">
+            <Network size={13} className="toggle-icon" />
+            <span className="toggle-text">Mesh Links</span>
           </div>
-          <div className={`toggle-switch ${showLinks ? 'active' : ''}`}>
-            <div className="toggle-switch-thumb" />
+          <div className={`glass-switch ${showLinks ? 'active' : ''}`}>
+            <div className="glass-switch-thumb" />
           </div>
         </div>
 
         <div
-          className="toggle-row"
+          className="glass-toggle-row"
           onClick={() => onToggleLabels(!showLabels)}
           role="switch"
           aria-checked={showLabels}
-          aria-label="Show node labels"
+          aria-label="Toggle node labels"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === ' ' || e.key === 'Enter') {
@@ -166,189 +238,390 @@ export const LeftControlPanel: React.FC<LeftControlPanelProps> = ({
             }
           }}
         >
-          <div className="toggle-label-with-icon">
-            <Tag size={13} />
-            <span>Show node labels</span>
+          <div className="toggle-info">
+            <Tag size={13} className="toggle-icon" />
+            <span className="toggle-text">Node Labels</span>
           </div>
-          <div className={`toggle-switch ${showLabels ? 'active' : ''}`}>
-            <div className="toggle-switch-thumb" />
+          <div className={`glass-switch ${showLabels ? 'active' : ''}`}>
+            <div className="glass-switch-thumb" />
           </div>
         </div>
       </div>
 
-      <div className="panel-divider" />
+      <div className="glass-divider" />
 
-      {/* SECTION 4: RESET SIMULATION */}
+      {/* SECTION 4: RESET CONTROL */}
       <button
         type="button"
-        className="tactical-btn tactical-btn-reset"
-        title="Reset simulation state to pristine baseline"
-        aria-label="Reset Simulation"
+        className="glass-btn glass-btn-reset"
         onClick={onResetSimulation}
+        aria-label="Reset Simulation"
+        title="Reset all active hazards, failures, and routes"
       >
         <RotateCcw size={13} />
         <span>Reset Simulation</span>
       </button>
 
       <style>{`
-        .left-panel {
-          width: 230px;
+        .left-command-dock {
+          width: 270px;
           margin-top: 14px;
           margin-left: 18px;
+          padding: 14px;
           display: flex;
           flex-direction: column;
         }
 
-        .hazard-buttons {
+        .dock-header {
           display: flex;
           flex-direction: column;
-          gap: 7px;
+          gap: 1px;
         }
 
-        .tactical-btn.hazard-active {
-          opacity: 0.95;
+        .dock-kicker {
+          font-family: var(--font-heading);
+          font-size: 0.60rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--cyan);
+        }
+
+        .dock-title {
+          font-family: var(--font-heading);
+          font-size: 0.90rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          letter-spacing: 0.02em;
+          margin: 0;
+        }
+
+        .header-meta {
+          font-size: 0.60rem;
+          font-weight: 500;
+          color: var(--text-muted);
+          text-transform: none;
+          letter-spacing: 0.02em;
+        }
+
+        .hazard-rows-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .hazard-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 7px 10px;
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid var(--glass-border);
+          border-radius: var(--radius-control);
+          color: var(--text-primary);
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          text-align: left;
+          width: 100%;
+        }
+
+        .hazard-row:hover:not(:disabled) {
+          background: rgba(255, 255, 255, 0.05);
+          border-color: rgba(255, 255, 255, 0.16);
+          transform: translateX(1px);
+        }
+
+        .hazard-row.is-disabled {
+          opacity: 0.45;
           cursor: not-allowed;
-          position: relative;
+          border-style: dashed;
         }
 
-        .tactical-btn.hazard-active.flood {
-          border-color: var(--flood);
-          background-color: rgba(59, 130, 246, 0.15);
+        .hazard-row.is-active {
+          cursor: default;
         }
 
-        .tactical-btn.hazard-active.fire {
-          border-color: var(--fire);
-          background-color: rgba(249, 115, 22, 0.15);
+        .hazard-row.is-active.flood {
+          background: rgba(56, 189, 248, 0.08);
+          border-color: rgba(56, 189, 248, 0.35);
         }
 
-        .tactical-btn.hazard-active.industrial {
-          border-color: var(--industrial);
-          background-color: rgba(192, 132, 252, 0.15);
+        .hazard-row.is-active.fire {
+          background: rgba(249, 115, 22, 0.08);
+          border-color: rgba(249, 115, 22, 0.35);
+        }
+
+        .hazard-row.is-active.industrial {
+          background: rgba(192, 132, 252, 0.08);
+          border-color: rgba(192, 132, 252, 0.35);
+        }
+
+        .hazard-icon-box {
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid var(--glass-border);
+          flex-shrink: 0;
+        }
+
+        .hazard-icon-box.flood { color: var(--flood); }
+        .hazard-icon-box.fire { color: var(--fire); }
+        .hazard-icon-box.industrial { color: var(--industrial); }
+
+        .hazard-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .hazard-name {
+          font-family: var(--font-heading);
+          font-size: 0.74rem;
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .hazard-origin {
+          font-family: var(--font-mono);
+          font-size: 0.58rem;
+          color: var(--text-secondary);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .hazard-action-indicator {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          margin-left: auto;
+        }
+
+        .action-arrow {
+          color: var(--text-muted);
+          transition: transform 0.2s ease, color 0.2s ease;
+        }
+
+        .hazard-row:hover:not(:disabled) .action-arrow {
+          transform: translateX(2px);
+          color: var(--text-primary);
+        }
+
+        .active-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-family: var(--font-mono);
+          font-size: 0.56rem;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          padding: 2px 5px;
+          border-radius: 4px;
+        }
+
+        .active-badge.flood {
+          color: var(--flood);
+          background: rgba(56, 189, 248, 0.12);
+          border: 1px solid rgba(56, 189, 248, 0.25);
+        }
+
+        .active-badge.fire {
+          color: var(--fire);
+          background: rgba(249, 115, 22, 0.12);
+          border: 1px solid rgba(249, 115, 22, 0.25);
+        }
+
+        .active-badge.industrial {
+          color: var(--industrial);
+          background: rgba(192, 132, 252, 0.12);
+          border: 1px solid rgba(192, 132, 252, 0.25);
         }
 
         .active-dot {
-          width: 6px;
-          height: 6px;
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
-          margin-left: auto;
-          animation: pulseDot 1.2s infinite ease-in-out;
+          background: currentColor;
+          animation: pulseDot 1.4s ease-in-out infinite;
         }
-
-        .active-dot.flood { background-color: var(--flood); box-shadow: 0 0 6px var(--flood); }
-        .active-dot.fire { background-color: var(--fire); box-shadow: 0 0 6px var(--fire); }
-        .active-dot.industrial { background-color: var(--industrial); box-shadow: 0 0 6px var(--industrial); }
 
         @keyframes pulseDot {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.5); opacity: 0.4; }
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(1.4); }
         }
 
-        .nodes-matrix {
+        .node-online-count {
+          font-family: var(--font-mono);
+          font-size: 0.60rem;
+          color: var(--cyan);
+          font-weight: 600;
+        }
+
+        .node-navigator-list {
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          max-height: 220px;
+          gap: 2px;
+          max-height: 180px;
           overflow-y: auto;
           padding-right: 4px;
         }
 
-        .node-matrix-item {
+        .node-nav-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          background: rgba(15, 28, 51, 0.6);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          padding: 4px 8px;
-          font-size: 0.72rem;
+          padding: 4px 7px;
+          border-radius: 5px;
           cursor: pointer;
-          transition: all 0.15s ease;
-        }
-
-        .node-matrix-item:hover {
-          border-color: rgba(45, 212, 238, 0.4);
-          background: rgba(15, 28, 51, 0.9);
-        }
-
-        .node-matrix-item.selected {
-          border-color: var(--cyan);
-          background: rgba(45, 212, 238, 0.12);
-        }
-
-        .node-matrix-item.failed {
-          border-left: 3px solid var(--critical);
-        }
-
-        .node-item-left {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-        }
-
-        .node-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-        }
-
-        .node-dot.online { background-color: var(--cyan); box-shadow: 0 0 5px var(--cyan); }
-        .node-dot.command { background-color: var(--command); box-shadow: 0 0 5px var(--command); }
-        .node-dot.failed { background-color: var(--critical); }
-
-        .node-item-name {
-          color: var(--text);
-          font-family: var(--font-mono);
-          font-size: 0.7rem;
-        }
-
-        .node-fail-mini-btn {
-          font-family: var(--font-mono);
-          font-size: 0.6rem;
-          font-weight: 700;
-          padding: 2px 6px;
-          border-radius: 3px;
-          cursor: pointer;
+          background: transparent;
           border: 1px solid transparent;
           transition: all 0.15s ease;
         }
 
-        .node-fail-mini-btn.btn-fail {
-          background: rgba(239, 68, 68, 0.15);
+        .node-nav-row:hover {
+          background: rgba(255, 255, 255, 0.035);
+          border-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .node-nav-row.selected {
+          background: rgba(34, 211, 238, 0.08);
+          border-color: rgba(34, 211, 238, 0.3);
+        }
+
+        .node-nav-row.failed {
+          opacity: 0.75;
+          border-left: 2px solid var(--critical);
+        }
+
+        .node-row-left {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          min-width: 0;
+        }
+
+        .node-nav-name {
+          font-family: var(--font-mono);
+          font-size: 0.68rem;
+          color: var(--text-primary);
+        }
+
+        .sensor-tag {
+          font-family: var(--font-mono);
+          font-size: 0.52rem;
+          padding: 1px 3px;
+          border-radius: 2px;
+          font-weight: 600;
+        }
+
+        .sensor-tag.flood { color: var(--flood); background: rgba(56, 189, 248, 0.12); }
+        .sensor-tag.fire { color: var(--fire); background: rgba(249, 115, 22, 0.12); }
+        .sensor-tag.industrial { color: var(--industrial); background: rgba(192, 132, 252, 0.12); }
+        .sensor-tag.severed { text-decoration: line-through; opacity: 0.6; }
+
+        .node-row-state {
+          font-family: var(--font-mono);
+          font-size: 0.56rem;
+          font-weight: 700;
           color: var(--critical);
-          border-color: rgba(239, 68, 68, 0.35);
+          letter-spacing: 0.03em;
         }
 
-        .node-fail-mini-btn.btn-fail:hover {
-          background: rgba(239, 68, 68, 0.3);
-        }
-
-        .node-fail-mini-btn.btn-restore {
-          background: rgba(45, 212, 238, 0.15);
+        .node-nav-row.selected .node-row-state {
           color: var(--cyan);
-          border-color: rgba(45, 212, 238, 0.35);
         }
 
-        .node-fail-mini-btn.btn-restore:hover {
-          background: rgba(45, 212, 238, 0.3);
-        }
-
-        .mesh-toggles {
+        .network-toggles-group {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 6px;
         }
 
-        .toggle-label-with-icon {
+        .glass-toggle-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 4px 0;
+          cursor: pointer;
+        }
+
+        .toggle-info {
           display: flex;
           align-items: center;
           gap: 8px;
+          color: var(--text-secondary);
+          transition: color 0.15s ease;
         }
 
-        @media (max-width: 760px) {
-          .left-panel {
-            width: calc(100% - 32px);
-            margin: 16px;
-            max-height: 48vh;
+        .glass-toggle-row:hover .toggle-info {
+          color: var(--text-primary);
+        }
+
+        .toggle-icon {
+          color: var(--text-muted);
+        }
+
+        .toggle-text {
+          font-family: var(--font-heading);
+          font-size: 0.70rem;
+        }
+
+        .glass-switch {
+          position: relative;
+          width: 32px;
+          height: 18px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid var(--glass-border);
+          border-radius: var(--radius-pill);
+          transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .glass-switch.active {
+          background: rgba(34, 211, 238, 0.22);
+          border-color: rgba(34, 211, 238, 0.45);
+        }
+
+        .glass-switch-thumb {
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: var(--text-muted);
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
+        }
+
+        .glass-switch.active .glass-switch-thumb {
+          transform: translateX(14px);
+          background: var(--cyan);
+          box-shadow: 0 0 6px rgba(34, 211, 238, 0.5);
+        }
+
+        .glass-btn-reset {
+          width: 100%;
+          justify-content: center;
+          color: var(--text-secondary);
+          padding: 7px 10px;
+        }
+
+        .glass-btn-reset:hover {
+          color: var(--critical);
+          border-color: rgba(244, 63, 94, 0.35);
+          background: rgba(244, 63, 94, 0.08);
+        }
+
+        @media (max-width: 768px) {
+          .left-command-dock {
+            width: calc(100% - 28px);
+            margin: 10px 14px;
+            max-height: 44vh;
             overflow-y: auto;
           }
         }

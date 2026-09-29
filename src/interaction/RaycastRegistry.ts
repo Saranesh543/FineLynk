@@ -62,11 +62,11 @@ export class RaycastRegistry {
 
       const category = node.isCommandCenter
         ? 'COMMAND CENTER'
-        : node.type.startsWith('hazard')
-        ? 'FIELD HAZARD NODE'
+        : node.sensorRole
+        ? 'ENVIRONMENT SENSOR + MESH RELAY'
         : isFieldMeshNode(node.id)
-        ? 'FIELD MESH NODE'
-        : 'TACTICAL RELAY NODE';
+        ? 'FIELD MESH RELAY'
+        : 'MULTI-HOP RELAY ROUTER';
 
       const targetData: InteractiveNodeTarget = {
         type: 'node',
@@ -78,6 +78,7 @@ export class RaycastRegistry {
         linksCount: connectedNodeNames.length,
         connectedNodeNames,
         isCommandCenter: !!node.isCommandCenter,
+        sensorRole: node.sensorRole,
       };
 
       mesh.userData = { interactiveTarget: targetData };
@@ -106,19 +107,22 @@ export class RaycastRegistry {
 
       let description = '';
       if (hazard.id === 'flood') {
-        description = 'Lowland river basin vulnerable to rapid flash flood inundation and telemetry severing.';
+        description = 'Lowland river basin monitored by redundant flood sensor cluster (Flood-04, Flood-S1, Flood-S2).';
       } else if (hazard.id === 'fire') {
-        description = 'Wooded highland sector with combustible timber and dense brush endangering Node Forest-07.';
+        description = 'Wooded highland sector monitored by redundant forest fire sensor cluster (Forest-07, Forest-S1, Forest-S2).';
       } else {
-        description = 'Remote industrial outpost subject to volatile chemical fuel vapor and utility pressure leaks.';
+        description = 'Remote industrial outpost monitored by redundant industrial leak sensor cluster (Indus-02, Indus-S1, Indus-S2).';
       }
 
       const targetData: InteractiveHazardTarget = {
         type: 'hazard',
         id: hazard.id,
         name: hazard.name,
+        zoneTitle: hazard.zoneTitle,
         targetNodeId: hazard.targetNodeId,
         targetNodeName: targetNode ? targetNode.name : `Node-${hazard.targetNodeId}`,
+        sensorNodeIds: hazard.sensorNodeIds,
+        sensorDesignations: hazard.sensorDesignations,
         color: hazard.color,
         description,
       };

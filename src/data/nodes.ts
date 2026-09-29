@@ -1,5 +1,12 @@
 import { NodeStatus } from './tokens';
 
+export interface SensorRoleData {
+  zoneId: 'flood' | 'fire' | 'industrial';
+  designation: string; // e.g. 'Flood-04', 'Flood-S1', 'Flood-S2'
+  tier: 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
+  sensorRoleDescription: string;
+}
+
 export interface NodeData {
   id: number;
   name: string;
@@ -11,6 +18,7 @@ export interface NodeData {
   coreElevation: number; // Height at which core and mesh-links sit (~55% of beam)
   isCommandCenter?: boolean;
   isFieldMesh?: boolean;
+  sensorRole?: SensorRoleData;
 }
 
 // Unified network floating horizon altitude
@@ -51,6 +59,12 @@ export const CORE_NODES: NodeData[] = [
     beamHeight: 6.4,
     coreRadius: 0.5,
     coreElevation: NETWORK_PLANE_Y,
+    sensorRole: {
+      zoneId: 'flood',
+      designation: 'Flood-04',
+      tier: 'PRIMARY',
+      sensorRoleDescription: 'Central Flood Basin Ultrasonic Gauge',
+    },
   },
   {
     id: 2,
@@ -61,6 +75,12 @@ export const CORE_NODES: NodeData[] = [
     beamHeight: 6.4,
     coreRadius: 0.5,
     coreElevation: NETWORK_PLANE_Y,
+    sensorRole: {
+      zoneId: 'fire',
+      designation: 'Forest-07',
+      tier: 'PRIMARY',
+      sensorRoleDescription: 'Central Forest Canopy Thermal IR Mast',
+    },
   },
   {
     id: 3,
@@ -71,6 +91,12 @@ export const CORE_NODES: NodeData[] = [
     beamHeight: 6.4,
     coreRadius: 0.5,
     coreElevation: NETWORK_PLANE_Y,
+    sensorRole: {
+      zoneId: 'industrial',
+      designation: 'Indus-02',
+      tier: 'PRIMARY',
+      sensorRoleDescription: 'Main Chemical Outpost Vapor Sniffer',
+    },
   },
   {
     id: 4,
@@ -122,6 +148,12 @@ export const FIELD_MESH_NODES: NodeData[] = [
     coreRadius: 0.32,
     coreElevation: NETWORK_PLANE_Y,
     isFieldMesh: true,
+    sensorRole: {
+      zoneId: 'flood',
+      designation: 'Flood-S1',
+      tier: 'SECONDARY',
+      sensorRoleDescription: 'Downstream Fluvial Hydrometric Station',
+    },
   },
   {
     id: 8,
@@ -144,6 +176,12 @@ export const FIELD_MESH_NODES: NodeData[] = [
     coreRadius: 0.32,
     coreElevation: NETWORK_PLANE_Y,
     isFieldMesh: true,
+    sensorRole: {
+      zoneId: 'flood',
+      designation: 'Flood-S2',
+      tier: 'TERTIARY',
+      sensorRoleDescription: 'Lowland Runoff & Soil Saturation Sensor',
+    },
   },
   {
     id: 10,
@@ -168,6 +206,12 @@ export const FIELD_MESH_NODES: NodeData[] = [
     coreRadius: 0.32,
     coreElevation: NETWORK_PLANE_Y,
     isFieldMesh: true,
+    sensorRole: {
+      zoneId: 'fire',
+      designation: 'Forest-S1',
+      tier: 'SECONDARY',
+      sensorRoleDescription: 'Highland Ridge Canopy Pyro-Thermal Station',
+    },
   },
   {
     id: 12,
@@ -190,6 +234,12 @@ export const FIELD_MESH_NODES: NodeData[] = [
     coreRadius: 0.32,
     coreElevation: NETWORK_PLANE_Y,
     isFieldMesh: true,
+    sensorRole: {
+      zoneId: 'fire',
+      designation: 'Forest-S2',
+      tier: 'TERTIARY',
+      sensorRoleDescription: 'Eastern Crest Timber Smolder & Humidity Probe',
+    },
   },
   {
     id: 14,
@@ -214,6 +264,12 @@ export const FIELD_MESH_NODES: NodeData[] = [
     coreRadius: 0.32,
     coreElevation: NETWORK_PLANE_Y,
     isFieldMesh: true,
+    sensorRole: {
+      zoneId: 'industrial',
+      designation: 'Indus-S1',
+      tier: 'SECONDARY',
+      sensorRoleDescription: 'Perimeter Gas & VOC Plume Sensor',
+    },
   },
   {
     id: 16,
@@ -236,6 +292,12 @@ export const FIELD_MESH_NODES: NodeData[] = [
     coreRadius: 0.32,
     coreElevation: NETWORK_PLANE_Y,
     isFieldMesh: true,
+    sensorRole: {
+      zoneId: 'industrial',
+      designation: 'Indus-S2',
+      tier: 'TERTIARY',
+      sensorRoleDescription: 'Storage Tank Farm Vapor & Pressure Sniffer',
+    },
   },
   {
     id: 18,
@@ -309,3 +371,17 @@ export const FIELD_MESH_NODES: NodeData[] = [
 
 // Unified Array of all 24 nodes
 export const NETWORK_NODES: NodeData[] = [...CORE_NODES, ...FIELD_MESH_NODES];
+
+export const isSensorCapableNode = (id: number): boolean => {
+  const node = NETWORK_NODES.find((n) => n.id === id);
+  return !!node?.sensorRole;
+};
+
+export const getNodeSensorRole = (id: number): SensorRoleData | undefined => {
+  return NETWORK_NODES.find((n) => n.id === id)?.sensorRole;
+};
+
+export const getHazardZoneSensorNodes = (zoneId: 'flood' | 'fire' | 'industrial'): NodeData[] => {
+  return NETWORK_NODES.filter((n) => n.sensorRole?.zoneId === zoneId);
+};
+

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { NETWORK_NODES } from '../data/nodes';
+import { NETWORK_NODES, getNodeSensorRole } from '../data/nodes';
 import { projectToScreen } from '../scene/Projection';
 import { ThreeScene } from '../scene/ThreeScene';
 
@@ -83,27 +83,31 @@ export const NodeLabelsOverlay: React.FC<NodeLabelsOverlayProps> = ({
 
   return (
     <div ref={containerRef} className="node-labels-container" aria-hidden="true">
-      {NETWORK_NODES.map((node) => (
-        <div
-          key={node.id}
-          ref={(el) => {
-            if (el) {
-              labelRefs.current.set(node.id, el);
-            } else {
-              labelRefs.current.delete(node.id);
-            }
-          }}
-          className={`node-label-item ${node.status}`}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            display: 'none',
-          }}
-        >
-          {node.name}
-        </div>
-      ))}
+      {NETWORK_NODES.map((node) => {
+        const sensorRole = getNodeSensorRole(node.id);
+        return (
+          <div
+            key={node.id}
+            ref={(el) => {
+              if (el) {
+                labelRefs.current.set(node.id, el);
+              } else {
+                labelRefs.current.delete(node.id);
+              }
+            }}
+            className={`node-label-item ${node.status}`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              display: 'none',
+            }}
+          >
+            {node.name}
+            {sensorRole && <span style={{ opacity: 0.8, fontSize: '0.85em', marginLeft: 3 }}>[{sensorRole.designation}]</span>}
+          </div>
+        );
+      })}
 
       <style>{`
         .node-labels-container {

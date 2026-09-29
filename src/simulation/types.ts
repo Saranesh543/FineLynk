@@ -35,6 +35,8 @@ export type SimulationEventType =
   | 'ROUTE_RECONFIGURED'
   | 'SIMULATION_RESET';
 
+import { ZoneCoverageState } from '../data/hazards';
+
 export interface SimulationEvent {
   type: SimulationEventType;
   hazardType?: HazardType;
@@ -49,4 +51,9 @@ export interface SimulationEvent {
   classification?: string;
   recommendedAction?: string;
   isRerouted?: boolean;
+  sources?: string[];
+  primarySource?: string;
+  confirmingSources?: string[];
+  coverageStatus?: string;
+  coverageState?: ZoneCoverageState;
 }

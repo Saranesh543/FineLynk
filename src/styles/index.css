@@ -1,24 +1,50 @@
 :root {
+  /* Core Color Palette */
   --void: #060a14;
-  --panel: #0a1424;
-  --panel-2: #0e1b30;
-  --border: #1e3352;
-  --text: #f1f5f9;
-  --text-dim: #8295b0;
+  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-secondary: rgba(255, 255, 255, 0.64);
+  --text-muted: rgba(255, 255, 255, 0.38);
+
+  /* Semantic Status Colors */
   --cyan: #22d3ee;
-  --flood: #0284c7;
+  --flood: #38bdf8;
   --fire: #f97316;
   --industrial: #c084fc;
-  --critical: #ef4444;
+  --critical: #f43f5e;
   --resolved: #10b981;
-  --command: #f59e0b;
-  --offline: #475569;
+  --command: #fbbf24;
+  --offline: #64748b;
 
-  --font-heading: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* Typography */
+  --font-heading: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --panel-radius: 8px;
-  --panel-padding: 14px;
+  /* Glass Surface Tokens - Level 1 (Floating HUD: Topbar, Legend, Indicators) */
+  --glass-hud-bg: rgba(8, 18, 34, 0.42);
+  --glass-hud-blur: 16px;
+
+  /* Glass Surface Tokens - Level 2 (Interactive Panels: Left Dock, Inspector, Stream) */
+  --glass-panel-bg: rgba(8, 18, 34, 0.58);
+  --glass-panel-blur: 26px;
+
+  /* Glass Surface Tokens - Level 3 (Contextual Focus / Actions) */
+  --glass-focus-bg: rgba(10, 22, 42, 0.72);
+  --glass-focus-blur: 30px;
+
+  /* Glass Borders & Highlights */
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-subtle: rgba(255, 255, 255, 0.04);
+  --glass-border-highlight: rgba(255, 255, 255, 0.16);
+  --glass-highlight: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.01) 100%);
+
+  /* Radii */
+  --radius-panel: 16px;
+  --radius-control: 9px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+  --glass-shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.16);
 }
 
 * {
@@ -33,9 +59,9 @@ html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: linear-gradient(180deg, #2f7fd6 0%, #6fb3e8 50%, #cfe8f5 100%);
-  color: var(--text);
-  font-family: var(--font-mono);
+  background: #060a14;
+  color: var(--text-primary);
+  font-family: var(--font-heading);
   user-select: none;
   touch-action: none;
 }
@@ -75,224 +101,168 @@ html, body, #root {
   pointer-events: auto;
 }
 
-/* Tactical Panel Styling */
-.tactical-panel {
-  background-color: rgba(10, 18, 34, 0.92);
-  border: 1px solid rgba(34, 211, 238, 0.22);
-  border-radius: var(--panel-radius);
-  padding: var(--panel-padding);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
+/* Minimal Glass Command Panel Primitives */
+.glass-panel {
+  background: var(--glass-panel-bg);
+  background-image: var(--glass-highlight);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-panel-blur));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur));
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.panel-header {
+/* Fallback for browsers without backdrop-filter */
+@supports not ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+  .glass-panel {
+    background: rgba(10, 20, 36, 0.94);
+  }
+}
+
+/* Hairline Section Separator */
+.glass-divider {
+  height: 1px;
+  background: var(--glass-border-subtle);
+  margin: 12px 0;
+  border: none;
+}
+
+/* Section Header in Minimal Typography */
+.glass-section-header {
   font-family: var(--font-heading);
+  font-size: 0.68rem;
   font-weight: 700;
-  font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.panel-divider {
-  height: 1px;
-  background-color: var(--border);
-  margin: 14px 0;
-  border-radius: 0;
-}
-
-/* Button & Control styling */
-.tactical-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  background-color: rgba(15, 28, 51, 0.7);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 500;
-  padding: 8px 10px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
-  text-align: left;
-}
-
-.tactical-btn:hover {
-  background-color: rgba(28, 44, 71, 0.8);
-  border-color: var(--cyan);
-}
-
-.tactical-btn:active {
-  transform: translateY(1px);
-}
-
-.tactical-btn:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 1px;
-}
-
-.tactical-btn-hazard {
-  margin-bottom: 8px;
-}
-
-.tactical-btn-hazard[data-hazard="flood"]:hover {
-  border-color: var(--flood);
-}
-
-.tactical-btn-hazard[data-hazard="fire"]:hover {
-  border-color: var(--fire);
-}
-
-.tactical-btn-hazard[data-hazard="industrial"]:hover {
-  border-color: var(--industrial);
-}
-
-.tactical-btn-reset {
-  background-color: transparent;
-  border-color: rgba(28, 44, 71, 0.5);
-  color: var(--text-dim);
-  margin-top: 12px;
-}
-
-.tactical-btn-reset:hover {
-  background-color: rgba(239, 68, 68, 0.15);
-  border-color: var(--critical);
-  color: var(--critical);
-}
-
-/* Toggle row */
-.toggle-row {
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 0;
-  font-size: 0.72rem;
-  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+/* Subtle Glass Controls / Buttons */
+.glass-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: 0.74rem;
+  font-weight: 500;
+  padding: 8px 12px;
   cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
   user-select: none;
 }
 
-.toggle-row:hover {
-  color: var(--text);
+.glass-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
 }
 
-.toggle-row:focus-visible {
+.glass-btn:active {
+  transform: scale(0.985);
+}
+
+.glass-btn:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
-.toggle-switch {
-  position: relative;
-  width: 32px;
-  height: 18px;
-  background-color: var(--offline);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-
-.toggle-switch.active {
-  background-color: rgba(45, 212, 238, 0.25);
-  border-color: var(--cyan);
-}
-
-.toggle-switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
+/* Status dots & pulses */
+.glass-status-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background-color: var(--text-dim);
-  transition: transform 0.2s ease, background-color 0.2s ease;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
-.toggle-switch.active .toggle-switch-thumb {
-  transform: translateX(14px);
-  background-color: var(--cyan);
-}
+.glass-status-dot.cyan { background-color: var(--cyan); box-shadow: 0 0 6px rgba(34, 211, 238, 0.4); }
+.glass-status-dot.command { background-color: var(--command); box-shadow: 0 0 6px rgba(251, 191, 36, 0.4); }
+.glass-status-dot.critical { background-color: var(--critical); box-shadow: 0 0 6px rgba(244, 63, 94, 0.5); }
+.glass-status-dot.offline { background-color: var(--offline); }
+.glass-status-dot.resolved { background-color: var(--resolved); box-shadow: 0 0 6px rgba(16, 185, 129, 0.4); }
 
-/* Node Label Overlay Elements */
+/* Node Label Overlay Elements - 3D Projected Minimalist Badges */
 .node-label-item {
   position: absolute;
   transform: translate(-50%, -100%);
   padding: 3px 8px;
-  background-color: rgba(6, 10, 20, 0.92);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
+  background: rgba(8, 18, 34, 0.65);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-family: var(--font-heading);
+  font-size: 0.66rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   white-space: nowrap;
   pointer-events: none;
-  transition: opacity 0.15s ease, border-color 0.2s ease, color 0.2s ease;
+  color: var(--text-primary);
+  transition: border-color 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
 }
 
 .node-label-item.command {
-  border-color: var(--command);
+  border-color: rgba(251, 191, 36, 0.45);
   color: var(--command);
 }
 
 .node-label-item.safe {
-  border-color: var(--cyan);
-  color: var(--cyan);
+  border-color: rgba(34, 211, 238, 0.35);
 }
 
 .node-label-item.critical {
-  border-color: var(--critical);
+  border-color: rgba(244, 63, 94, 0.6);
   color: var(--critical);
 }
 
 .node-label-item.offline {
-  border-color: var(--offline);
+  border-color: rgba(100, 116, 139, 0.35);
   color: var(--offline);
-  background-color: rgba(15, 23, 42, 0.92);
+  background: rgba(15, 23, 42, 0.7);
 }
 
 .node-label-item.hovered {
-  border-color: #ffffff;
-  box-shadow: 0 0 8px rgba(45, 212, 238, 0.4);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.25);
 }
 
 .node-label-item.selected {
   border-color: var(--cyan);
-  box-shadow: 0 0 12px var(--cyan);
-  font-weight: 700;
-  outline: 1px solid var(--cyan);
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.35);
+  color: #ffffff;
 }
 
 .node-label-item.field-mesh {
-  font-size: 0.58rem;
+  font-size: 0.60rem;
   padding: 2px 6px;
-  background-color: rgba(6, 10, 20, 0.85);
-  border-color: rgba(45, 212, 238, 0.35);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  opacity: 0.88;
 }
 
-/* Scrollbars */
+/* Custom Minimal Scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-dim);
+  background: rgba(255, 255, 255, 0.24);
 }
 
 /* Accessibility & Reduced Motion */

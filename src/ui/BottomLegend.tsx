@@ -2,76 +2,83 @@ import React from 'react';
 
 interface LegendItem {
   label: string;
-  color: string;
+  dotClass: string;
 }
 
 const LEGEND_ITEMS: LegendItem[] = [
-  { label: 'Command Center', color: 'var(--command)' },
-  { label: 'Safe', color: 'var(--cyan)' },
-  { label: 'Hazard Detected', color: 'var(--critical)' },
-  { label: 'Resolved', color: 'var(--resolved)' },
-  { label: 'Offline', color: 'var(--offline)' },
+  { label: 'Command', dotClass: 'command' },
+  { label: 'Safe', dotClass: 'cyan' },
+  { label: 'Hazard', dotClass: 'critical' },
+  { label: 'Resolved', dotClass: 'resolved' },
+  { label: 'Offline', dotClass: 'offline' },
 ];
 
 export const BottomLegend: React.FC = () => {
   return (
-    <div className="interactive bottom-legend-container">
-      <div className="bottom-legend-pill">
+    <div className="interactive glass-bottom-legend" role="region" aria-label="3D Node Map Legend">
+      <div className="legend-capsule">
         {LEGEND_ITEMS.map((item) => (
-          <div key={item.label} className="legend-entry">
-            <span
-              className="legend-dot"
-              style={{ backgroundColor: item.color, boxShadow: `0 0 6px ${item.color}` }}
-            />
+          <div key={item.label} className="legend-item">
+            <span className={`glass-status-dot ${item.dotClass}`} />
             <span className="legend-label">{item.label}</span>
           </div>
         ))}
       </div>
 
       <style>{`
-        .bottom-legend-container {
+        .glass-bottom-legend {
           position: absolute;
-          bottom: 18px;
+          bottom: 16px;
           left: 50%;
           transform: translateX(-50%);
           z-index: 20;
+          pointer-events: auto;
         }
 
-        .bottom-legend-pill {
+        .legend-capsule {
           display: flex;
           align-items: center;
-          gap: 16px;
-          padding: 8px 18px;
-          background-color: rgba(12, 21, 38, 0.88);
-          border: 1px solid var(--border);
-          border-radius: 24px;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-          backdrop-filter: blur(8px);
+          gap: 14px;
+          padding: 6px 16px;
+          background: var(--glass-hud-bg);
+          background-image: var(--glass-highlight);
+          border: 1px solid var(--glass-border);
+          border-radius: var(--radius-pill);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+          backdrop-filter: blur(var(--glass-hud-blur));
+          -webkit-backdrop-filter: blur(var(--glass-hud-blur));
         }
 
-        .legend-entry {
+        .legend-item {
           display: flex;
           align-items: center;
-          gap: 7px;
-          font-size: 0.70rem;
-          color: var(--text);
+          gap: 6px;
+          font-size: 0.68rem;
+          color: var(--text-secondary);
           white-space: nowrap;
+          transition: color 0.15s ease;
         }
 
-        .legend-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
+        .legend-item:hover {
+          color: var(--text-primary);
         }
 
         .legend-label {
-          font-family: var(--font-mono);
+          font-family: var(--font-heading);
           font-weight: 500;
+          letter-spacing: 0.02em;
         }
 
-        @media (max-width: 760px) {
-          .bottom-legend-container {
-            display: none;
+        @media (max-width: 768px) {
+          .glass-bottom-legend {
+            bottom: 8px;
+          }
+          .legend-capsule {
+            gap: 10px;
+            padding: 5px 12px;
+          }
+          .legend-label {
+            font-size: 0.62rem;
           }
         }
       `}</style>

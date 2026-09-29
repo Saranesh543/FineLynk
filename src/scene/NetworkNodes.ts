@@ -285,6 +285,90 @@ export class NetworkNodes {
           { geometry: grilleGeom, material: grilleMat },
           { geometry: postGeom }
         );
+      } else if (node.id === 7 || node.id === 9) {
+        // Flood Secondary / Tertiary Sensors (Flood-S1, Flood-S2): Hydrometric Water Probe Stanchion
+        const probeGeom = new THREE.CylinderGeometry(0.025, 0.025, 0.9, 6);
+        const probeMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#384b66'),
+          roughness: 0.6,
+          metalness: 0.3,
+        });
+        const probeMesh = new THREE.Mesh(probeGeom, probeMat);
+        probeMesh.position.set(-platRadiusTop * 0.45, platHeight + 0.45, platRadiusTop * 0.3);
+        nodeGroup.add(probeMesh);
+
+        // Water level sensor collar ring (turquoise)
+        const collarGeom = new THREE.TorusGeometry(0.035, 0.01, 4, 8);
+        collarGeom.rotateX(Math.PI / 2);
+        const collarMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#2dd4c8') });
+        const collarMesh = new THREE.Mesh(collarGeom, collarMat);
+        collarMesh.position.set(-platRadiusTop * 0.45, platHeight + 0.65, platRadiusTop * 0.3);
+        nodeGroup.add(collarMesh);
+
+        this.disposables.push(
+          { geometry: probeGeom, material: probeMat },
+          { geometry: collarGeom, material: collarMat }
+        );
+      } else if (node.id === 11 || node.id === 13) {
+        // Forest Secondary / Tertiary Sensors (Forest-S1, Forest-S2): Pyro-Thermal IR Sensor Head
+        const mastGeom = new THREE.CylinderGeometry(0.025, 0.025, 1.0, 6);
+        const mastMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#334155'),
+          roughness: 0.7,
+          metalness: 0.3,
+        });
+        const mastMesh = new THREE.Mesh(mastGeom, mastMat);
+        mastMesh.position.set(-platRadiusTop * 0.45, platHeight + 0.5, platRadiusTop * 0.3);
+        nodeGroup.add(mastMesh);
+
+        const headGeom = new THREE.BoxGeometry(0.08, 0.07, 0.12);
+        const headMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#1e293b'),
+          roughness: 0.4,
+          metalness: 0.6,
+        });
+        const headMesh = new THREE.Mesh(headGeom, headMat);
+        headMesh.position.set(-platRadiusTop * 0.45, platHeight + 0.98, platRadiusTop * 0.3);
+        headMesh.rotation.y = 0.5;
+        nodeGroup.add(headMesh);
+
+        // Emissive IR sensor lens (orange)
+        const lensGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.015, 6);
+        lensGeom.rotateX(Math.PI / 2);
+        const lensMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#f97316') });
+        const lensMesh = new THREE.Mesh(lensGeom, lensMat);
+        lensMesh.position.set(-platRadiusTop * 0.45 + 0.04, platHeight + 0.98, platRadiusTop * 0.3 + 0.05);
+        nodeGroup.add(lensMesh);
+
+        this.disposables.push(
+          { geometry: mastGeom, material: mastMat },
+          { geometry: headGeom, material: headMat },
+          { geometry: lensGeom, material: lensMat }
+        );
+      } else if (node.id === 15 || node.id === 17) {
+        // Industrial Secondary / Tertiary Sensors (Indus-S1, Indus-S2): Vapor Sniffer Canister
+        const canisterGeom = new THREE.CylinderGeometry(0.06, 0.06, 0.28, 8);
+        const canisterMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#384152'),
+          roughness: 0.3,
+          metalness: 0.7,
+        });
+        const canisterMesh = new THREE.Mesh(canisterGeom, canisterMat);
+        canisterMesh.position.set(-platRadiusTop * 0.45, platHeight + 0.22, platRadiusTop * 0.3);
+        nodeGroup.add(canisterMesh);
+
+        // Slotted intake sensor grille ring (purple)
+        const grilleGeom = new THREE.TorusGeometry(0.065, 0.01, 4, 8);
+        grilleGeom.rotateX(Math.PI / 2);
+        const grilleMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#c084fc') });
+        const grilleMesh = new THREE.Mesh(grilleGeom, grilleMat);
+        grilleMesh.position.set(-platRadiusTop * 0.45, platHeight + 0.28, platRadiusTop * 0.3);
+        nodeGroup.add(grilleMesh);
+
+        this.disposables.push(
+          { geometry: canisterGeom, material: canisterMat },
+          { geometry: grilleGeom, material: grilleMat }
+        );
       }
 
       // -------------------------------------------------------------
